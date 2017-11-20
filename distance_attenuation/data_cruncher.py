@@ -36,14 +36,11 @@ class data_cruncher:
 
     def digest_rawdata(self):
 
-        self.data_from_file()
-
-        self.folder_list = self.folder_list#[:4]
-
+        # check if DataFrame contains any data was loaded and if not, warn user that any existing  data
+        # on the data path will be overwritten in the process
         if self.data.empty:
             confirmation = input('WARNING: if you continue, the current '+self.data_file+' will be overwritten! Confirm? (Y/n): ')
             if confirmation.lower() == 'y':
-                # add data_folder column and fill it with folders
                 self.data['data_dir'] = None
                 self.data['data_folder'] = None
                 self.data['digested'] = None
@@ -57,33 +54,37 @@ class data_cruncher:
                     self.data = self.data.append(pd.DataFrame(newrow), ignore_index=True)
 
 
+        # iterate through all folders that have not already been processed
         cond = self.data.loc[:, 'digested'] == False
         for rowidx, data_folder, data_dir in zip(self.data.index[cond], self.data.data_folder[cond], self.data.data_dir[cond]):
             print('Entry', rowidx, '-', data_folder, '...')
 
             data_path = data_dir + [data_folder]
 
+            # get metadata
             info_path = os.path.join(*data_path, 'info.dat')
             if os.path.exists(info_path):
                 rec_info = pyre_load(info_path)
             else:
                 print('Info.dat missing')
 
-            # iterate through measurements
+            # load recordings of white-noise stimuli
             transfer_file = os.path.join(*data_path, 'transferfunction-traces.dat')
             if not os.path.exists(transfer_file):
                 print('transferfunction-traces.dat missing')
                 exit()
 
-            transfer_data = pyre_load(transfer_file)
+
 
             Pxxs = []
             Pxys = []
             Pyys = []
             Pyxs = []
-            for trialidx, trial_data in enumerate(transfer_data.data_blocks()):
-                print('Trial', trialidx)
-                # load traces for block
+            # iterate through trials
+            transfer_data = pyre_load(transfer_file)
+            for trial_idx, trial_data in enumerate(transfer_data.data_blocks()):
+                print('Trial', trial_idx)
+                # load traces for this trial
                 traces = asarray([row.split() for row in trial_data[-1]], dtype=float).transpose()
 
                 # get data for spectral analysis
@@ -106,11 +107,11 @@ class data_cruncher:
                 Pxys.append(Pxy)
                 Pyxs.append(Pyx)
 
-
+                # free memory
                 del Pxx, Pyy, Pxy, Pyx, traces, output, response
                 gc.collect()
 
-            # generate new dictionary
+            # generate new dictionary containing spectra and metadata of all trials
             row_content = dict(Pxxs = asarray(Pxxs),
                                Pyys = asarray(Pyys),
                                Pxys = asarray(Pxys),
@@ -123,19 +124,25 @@ class data_cruncher:
             # add to DataFrame
             self.add_data(rowidx, row_content)
 
+            # free memory
             del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data
             gc.collect()
 
-            if rowidx % 10 == 0:  # save to file every once in a while
+            # save DataFrameto file every once in a while
+            if rowidx % 10 == 0:
                 self.data_to_file()
-        # save file
+
+        # save DataFrame to file
         self.data_to_file()
+
 
     def extract_metadata(self, rawstr):
         return rawstr.replace('"', '').replace(' ', '')
 
 
     def add_relevant_metadata(self):
+        # takes importan metadata from the dictionaries (as provided by pyrelacs)
+        # and adds it to the DataFrame
 
         print('Add metadata information...')
         for rowidx, metadata, trialmeta in zip(self.data.index, self.data.metadata, self.data.trialmeta):
@@ -156,7 +163,13 @@ class data_cruncher:
     def calculate_stuff(self):
 
         print('Calculate output-response transfer functions...')
-        for rowidx, freqs, Pxxs, Pyys, Pxys, Pyxs in zip(self.data.index, self.data.freqs, self.data.Pxxs, self.data.Pyys, self.data.Pxys, self.data.Pyxs):
+        for rowidx, freqs, Pxxs, Pyys, Pxys, Pyxs in zip(self.data.index,
+                                                         self.data.freqs,
+                                                         self.data.Pxxs,
+                                                         self.data.Pyys,
+                                                         self.data.Pxys,
+                                                         self.data.Pyxs):
+
             newdata = dict()
             # mean PSD(output)
             newdata['Pxx'] = mean(Pxxs, axis=0)
@@ -188,19 +201,24 @@ class data_cruncher:
         # save to file
         self.data_to_file()
 
+
         print('Calculate signal-response transfer functions...')
-        calib_cond = {2015: self.data.index[(self.data.year == 2015) & (self.data.distance == 50) & (self.data.condition == 'Cutmeadow')],
-                2016: self.data.index[(self.data.year == 2016) & (self.data.distance == 100) & (self.data.condition == 'Open')]}
+        # conditions for calibration-recordings (smallest distance in an open environment)
+        calib_cond = {
+            2015: self.data.index[(self.data.distance == 50) & (self.data.condition == 'Cutmeadow')],
+            2016: self.data.index[(self.data.distance == 100) & (self.data.condition == 'Open')]
+        }
 
         for year in calib_cond.keys():
+            # basic condition for all datasets
+            dataset_cond = (self.data.year == year)
+
             # calculate mean output-response transfer function for equipment during this year
             # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
-            H_or_calib = mean(self.data.H_or[calib_cond[year]].values, axis=0)
-
-            datasets_cond = (self.data.year == year)
+            H_or_calib = mean(self.data.H_or[calib_cond[year] & dataset_cond].values, axis=0)
 
             # get output-response transfer function for this year
-            Hs_or = asarray([line for line in self.data.H_or[datasets_cond].values])
+            Hs_or = asarray([line for line in self.data.H_or[dataset_cond].values])
 
             # calculate signal-response transfer functions
             Hs_sr = Hs_or / H_or_calib
@@ -208,14 +226,10 @@ class data_cruncher:
             newdata = dict(H_sr = [row for row in Hs_sr])
 
             # add data to DataFrame
-            self.add_data(datasets_cond, newdata)
+            self.add_data(dataset_cond, newdata)
 
         # save DataFrame to file
         self.data_to_file()
-
-
-
-        embed()
 
 
     def add_data(self, rowidx, row_content):
@@ -257,16 +271,22 @@ if __name__ == '__main__':
     cruncher = data_cruncher()
 
     if 'gather' in sys.argv:
+        # add folders to be processed
         cruncher.gather_folders('2016')
         cruncher.gather_folders('2015')
 
+
+        # load data from .pkl file if it exists
+        cruncher.data_from_file()
+
+        # iterate through all new folders and calc spectra from raw traces
         cruncher.digest_rawdata()
 
         embed()
     elif 'calculate' in sys.argv:
         cruncher.data_from_file()
-        cruncher.calculate_stuff()
         cruncher.add_relevant_metadata()
+        cruncher.calculate_stuff()
     else:
         cruncher.data_from_file()
         embed()
