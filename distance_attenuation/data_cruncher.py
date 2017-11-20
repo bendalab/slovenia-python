@@ -4,7 +4,6 @@ from path_settings import *
 import pandas as pd
 import pickle
 import os
-import json
 import gc
 import sys
 from glob import glob
@@ -24,7 +23,7 @@ class data_cruncher:
 
 
     def gather_folders(self, year):
-        # function gathers all folderpaths on given subdir for which there exists no .json-file
+        # function gathers all folderpaths on given subdir
 
         if os.path.exists(os.path.join(*data_dir)):
             new_folders = glob(os.path.join(*data_dir, year, year+'*'))
@@ -111,7 +110,6 @@ class data_cruncher:
                 del Pxx, Pyy, Pxy, Pyx, traces, output, response
                 gc.collect()
 
-            trialmeta = trial_data[0]
             # generate new dictionary
             row_content = dict(Pxxs = asarray(Pxxs),
                                Pyys = asarray(Pyys),
@@ -120,12 +118,12 @@ class data_cruncher:
                                freqs = f,
                                digested = True,
                                metadata = rec_info,
-                               trialmeta = [trialmeta])
+                               trialmeta = [trial_data[0]])
 
             # add to DataFrame
             self.add_data(rowidx, row_content)
 
-            del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data, trialmeta
+            del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data
             gc.collect()
 
             if rowidx % 10 == 0:  # save to file every once in a while
@@ -159,7 +157,6 @@ class data_cruncher:
 
         print('Calculate output-response transfer functions...')
         for rowidx, freqs, Pxxs, Pyys, Pxys, Pyxs in zip(self.data.index, self.data.freqs, self.data.Pxxs, self.data.Pyys, self.data.Pxys, self.data.Pyxs):
-
             newdata = dict()
             # mean PSD(output)
             newdata['Pxx'] = mean(Pxxs, axis=0)
@@ -187,11 +184,36 @@ class data_cruncher:
 
             # add data
             self.add_data(rowidx, newdata)
+
+        # save to file
         self.data_to_file()
 
         print('Calculate signal-response transfer functions...')
-        #cond = {2015: self.data.index[(self.data.year == 2015) & (self.data.distance == 50) & (self.data.condition == 'Cutmeadow')],
-                #2016: self.data.index[(self.data.year == 2016) & (self.data.distance == 100) & (self.data.condition == 'Open')]}
+        calib_cond = {2015: self.data.index[(self.data.year == 2015) & (self.data.distance == 50) & (self.data.condition == 'Cutmeadow')],
+                2016: self.data.index[(self.data.year == 2016) & (self.data.distance == 100) & (self.data.condition == 'Open')]}
+
+        for year in calib_cond.keys():
+            # calculate mean output-response transfer function for equipment during this year
+            # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
+            H_or_calib = mean(self.data.H_or[calib_cond[year]].values, axis=0)
+
+            datasets_cond = (self.data.year == year)
+
+            # get output-response transfer function for this year
+            Hs_or = asarray([line for line in self.data.H_or[datasets_cond].values])
+
+            # calculate signal-response transfer functions
+            Hs_sr = Hs_or / H_or_calib
+
+            newdata = dict(H_sr = [row for row in Hs_sr])
+
+            # add data to DataFrame
+            self.add_data(datasets_cond, newdata)
+
+        # save DataFrame to file
+        self.data_to_file()
+
+
 
         embed()
 
