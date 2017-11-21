@@ -205,8 +205,8 @@ class data_cruncher:
         print('Calculate signal-response transfer functions...')
         # conditions for calibration-recordings (smallest distance in an open environment)
         calib_cond = {
-            2015: self.data.index[(self.data.distance == 50) & (self.data.condition == 'Cutmeadow')],
-            2016: self.data.index[(self.data.distance == 100) & (self.data.condition == 'Open')]
+            2015: (self.data.distance == 50) & (self.data.condition == 'Cutmeadow'),
+            2016: (self.data.distance == 100) & (self.data.condition == 'Open')
         }
 
         for year in calib_cond.keys():
@@ -215,6 +215,7 @@ class data_cruncher:
 
             # calculate mean output-response transfer function for equipment during this year
             # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
+            embed()
             H_or_calib = mean(self.data.H_or[calib_cond[year] & dataset_cond].values, axis=0)
 
             # get output-response transfer function for this year
