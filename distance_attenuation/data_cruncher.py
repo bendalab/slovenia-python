@@ -11,50 +11,41 @@ from IPython import embed
 import matplotlib; matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import matplotlib.mlab as ml
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class data_cruncher:
 
     data_file = 'data.pkl'
-    avg_data_file = 'avg_data.pkl'
 
     def __init__(self):
-        self.folder_list = []
-        self.data = pd.DataFrame()
-        self.avg_data = pd.DataFrame()
+        self.data = self.data_from_file()
 
 
-    def gather_folders(self, year):
-        # function gathers all folderpaths on given subdir
+    def gather_folders(self, years):
+        # function gathers all folderpaths on given subdirs
 
-        if os.path.exists(os.path.join(*data_dir)):
-            new_folders = glob(os.path.join(*data_dir, year, year+'*'))
-            self.folder_list.extend([folder.split(os.sep) for folder in new_folders])
-            print(str(len(new_folders)), 'new folders have been added to list for subdir', year, '...')
-        else:
+        if not os.path.exists(os.path.join(*data_dir)):
             print('Data directory does not exist.')
             exit()
 
+        newcount = 0
+        for year in years:
+            new_folders = glob(os.path.join(*data_dir, year, year+'*'))
+            folder_list = [folder.split(os.sep) for folder in new_folders]
 
-    def digest_rawdata(self, dat_file, abbrv):
-
-        # check if DataFrame contains any data was loaded and if not, warn user that any existing  data
-        # on the data path will be overwritten in the process
-        if self.data.empty:
-            confirmation = input('WARNING: if you continue, the current '+self.data_file+' will be overwritten! Confirm? (Y/n): ')
-            if confirmation.lower() != 'y':
-                exit()
-
-        self.data['data_dir'] = None
-        self.data['data_folder'] = None
-        self.data['digested'] = None
-
-        # add folders that are not already included in DataFrame
-        for data_path in self.folder_list:
-                if data_path[-1] not in self.data.data_folder.values:
+            # add folders that are not already included in DataFrame
+            for data_path in folder_list:
+                if not data_path[-1] in self.data.data_folder.values:
                     newrow = dict(data_folder=data_path[-1], data_dir=[data_path[:-1]], digested=False)
                     self.data = self.data.append(pd.DataFrame(newrow), ignore_index=True)
 
+                    newcount += 1
+
+        print(newcount, 'new folders have been added to DataFrame', '...')
+
+
+    def digest_rawdata(self, dat_files = dict(noise='transferfunction-traces')):
 
         # iterate through all folders that have not already been processed
         cond = self.data.loc[:, 'digested'] == False
@@ -70,64 +61,72 @@ class data_cruncher:
             else:
                 print('Info.dat missing')
 
-            # load recordings of white-noise stimuli
-            transfer_file = os.path.join(*data_path, dat_file+'.dat')
-            if not os.path.exists(transfer_file):
-                print(dat_file+'.dat missing')
-                exit()
+            # load recordings
+            for abbrv in dat_files.keys():
+                dat_file = dat_files[abbrv] + '.dat'
+                print(dat_file)
+
+                transfer_file = os.path.join(*data_path, dat_file)
+                if not os.path.exists(transfer_file):
+                    print('File missing')
+                    exit()
 
 
-            Pxxs = []
-            Pxys = []
-            Pyys = []
-            Pyxs = []
-            # iterate through trials
-            transfer_data = pyre_load(transfer_file)
-            for trial_idx, trial_data in enumerate(transfer_data.data_blocks()):
-                print('Trial', trial_idx)
-                # load traces for this trial
-                traces = asarray([row.split() for row in trial_data[-1]], dtype=float).transpose()
+                Pxxs = []
+                Pxys = []
+                Pyys = []
+                Pyxs = []
+                # iterate through trials
+                transfer_data = pyre_load(transfer_file)
+                for trial_idx, trial_data in enumerate(transfer_data.data_blocks()):
+                    print('Trial', trial_idx)
+                    # load traces for this trial
+                    traces = asarray([row.split() for row in trial_data[-1]], dtype=float).transpose()
 
-                # get data for spectral analysis
-                sr = 1000. / mean(diff(traces[0, :]))
-                output = traces[1, :]
-                output -= mean(output)
-                response = traces[2, :]
-                response -= mean(response)
+                    # get data for spectral analysis
+                    sr = 1000. / mean(diff(traces[0, :]))
+                    output = traces[1, :]
+                    output -= mean(output)
+                    response = traces[2, :]
+                    response -= mean(response)
 
-                nfft = 2 ** 11
-                sd_params = {'Fs': sr, 'NFFT': nfft, 'noverlap': nfft / 2}
+                    nfft = 2 ** 11
+                    sd_params = {'Fs': sr, 'NFFT': nfft, 'noverlap': nfft / 2}
 
-                Pxx, _ = ml.psd(output, **sd_params)
-                Pyy, _ = ml.psd(response, **sd_params)
-                Pxy, _ = ml.csd(output, response, **sd_params)
-                Pyx, f = ml.csd(response, output, **sd_params)
+                    Pxx, _ = ml.psd(output, **sd_params)
+                    Pyy, _ = ml.psd(response, **sd_params)
+                    Pxy, _ = ml.csd(output, response, **sd_params)
+                    Pyx, f = ml.csd(response, output, **sd_params)
 
-                Pxxs.append(Pxx)
-                Pyys.append(Pyy)
-                Pxys.append(Pxy)
-                Pyxs.append(Pyx)
+                    Pxxs.append(Pxx)
+                    Pyys.append(Pyy)
+                    Pxys.append(Pxy)
+                    Pyxs.append(Pyx)
+
+                    # free memory
+                    del Pxx, Pyy, Pxy, Pyx, traces, output, response
+                    gc.collect()
+
+                # generate new dictionary containing spectra and metadata of all trials
+                row_content = {
+                    abbrv + '_Pxxs': asarray(Pxxs),
+                    abbrv + '_Pyys': asarray(Pyys),
+                    abbrv + '_Pxys': asarray(Pxys),
+                    abbrv + '_Pyxs': asarray(Pyxs),
+                    abbrv + '_freqs': f,
+                    abbrv + '_trialmeta': [trial_data[0]],
+                    'metadata': rec_info
+                }
+
+                # add to DataFrame
+                self.add_data(rowidx, row_content)
 
                 # free memory
-                del Pxx, Pyy, Pxy, Pyx, traces, output, response
+                del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data
                 gc.collect()
 
-            # generate new dictionary containing spectra and metadata of all trials
-            row_content = dict(Pxxs = asarray(Pxxs),
-                               Pyys = asarray(Pyys),
-                               Pxys = asarray(Pxys),
-                               Pyxs = asarray(Pyxs),
-                               freqs = f,
-                               digested = True,
-                               metadata = rec_info,
-                               trialmeta = [trial_data[0]])
-
-            # add to DataFrame
-            self.add_data(rowidx, row_content)
-
-            # free memory
-            del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data
-            gc.collect()
+            # mark dataset as processed
+            self.add_data(rowidx, dict(digested=True))
 
             # save to file
             self.data_to_file()
@@ -158,41 +157,42 @@ class data_cruncher:
         self.data_to_file()
 
 
-    def calculate_stuff(self):
+    def calculate_stuff(self, abbrvs):
 
         print('Calculate output-response transfer functions...')
-        for rowidx, rowdata in self.data.iterrows():
+        for abbrv in abbrvs:
+            for rowidx, rowdata in self.data.iterrows():
 
-            newdata = dict()
-            # mean PSD(output)
-            newdata['Pxx'] = mean(rowdata.Pxxs, axis=0)
-            newdata['Pxx_sd'] = std(rowdata.Pxxs, axis=0)
+                newdata = dict()
+                # mean PSD(output)
+                newdata[abbrv + '_Pxx'] = mean(rowdata[abbrv + '_Pxxs'], axis=0)
+                newdata[abbrv + '_Pxx_sd'] = std(rowdata[abbrv + '_Pxxs'], axis=0)
 
-            # mean PSD(response)
-            newdata['Pyy'] = mean(rowdata.Pyys, axis=0)
-            newdata['Pyy_sd'] = std(rowdata.Pyys, axis=0)
+                # mean PSD(response)
+                newdata[abbrv + '_Pyy'] = mean(rowdata[abbrv + '_Pyys'], axis=0)
+                newdata[abbrv + '_Pyy_sd'] = std(rowdata[abbrv + '_Pyys'], axis=0)
 
-            # mean CSD(output, response)
-            newdata['Pxy'] = mean(rowdata.Pxys, axis=0)
-            newdata['Pxy_sd'] = std(rowdata.Pxys, axis=0)
+                # mean CSD(output, response)
+                newdata[abbrv + '_Pxy'] = mean(rowdata[abbrv + '_Pxys'], axis=0)
+                newdata[abbrv + '_Pxy_sd'] = std(rowdata[abbrv + '_Pxys'], axis=0)
 
-            # mean CSD(response, output)
-            newdata['Pyx'] = mean(rowdata.Pyxs, axis=0)
-            newdata['Pyx_sd'] = std(rowdata.Pyxs, axis=0)
+                # mean CSD(response, output)
+                newdata[abbrv + '_Pyx'] = mean(rowdata[abbrv + '_Pyxs'], axis=0)
+                newdata[abbrv + '_Pyx_sd'] = std(rowdata[abbrv + '_Pyxs'], axis=0)
 
-            # output-response transfer
-            newdata['H_or'] = abs(newdata['Pxy']) / newdata['Pxx']
-            newdata['H_or_sd'] = abs(newdata['Pxy_sd']) / newdata['Pxx_sd']
+                # output-response transfer
+                newdata[abbrv + '_H_or'] = newdata[abbrv + '_Pxy'] / newdata[abbrv + '_Pxx']
+                newdata[abbrv + '_H_or_sd'] = newdata[abbrv + '_Pxy_sd'] / newdata[abbrv + '_Pxx_sd']
 
-            # response-output transfer
-            newdata['H_ro'] = abs(newdata['Pyx']) / newdata['Pyy']
-            newdata['H_ro_sd'] = abs(newdata['Pyx_sd']) / newdata['Pyy_sd']
+                # response-output transfer
+                newdata[abbrv + '_H_ro'] = newdata[abbrv + '_Pyx'] / newdata[abbrv + '_Pyy']
+                newdata[abbrv + '_H_ro_sd'] = newdata[abbrv + '_Pyx_sd'] / newdata[abbrv + '_Pyy_sd']
 
-            # add data
-            self.add_data(rowidx, newdata)
+                # add data
+                self.add_data(rowidx, newdata)
 
-        # save to file
-        self.data_to_file()
+            # save to file
+            self.data_to_file()
 
 
         print('Calculate signal-response transfer functions and coherence...')
@@ -202,47 +202,52 @@ class data_cruncher:
             2016: (self.data.distance == 100) & (self.data.condition == 'Open')
         }
 
-        for year in calib_cond.keys():
-            # basic condition for all datasets
-            dataset_cond = (self.data.year == year)
+        for abbrv in abbrvs:
+            for year in calib_cond.keys():
+                # basic condition for all datasets
+                dataset_cond = (self.data.year == year)
 
-            # calculate mean output-response transfer function for equipment during this year
-            # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
-            H_or_calib = mean(self.data.H_or[calib_cond[year] & dataset_cond].values, axis=0)
-            H_ro_calib = mean(self.data.H_ro[calib_cond[year] & dataset_cond].values, axis=0)
+                # calculate mean output-response transfer function for equipment during this year
+                # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
+                H_or_calib = mean(self.data[abbrv + '_H_or'][calib_cond[year] & dataset_cond].values, axis=0)
+                H_ro_calib = mean(self.data[abbrv + '_H_ro'][calib_cond[year] & dataset_cond].values, axis=0)
 
-            # get output-response transfer function for this year
-            Hs_or = asarray([row for row in self.data.H_or[dataset_cond].values])
-            # get output-response transfer function for this year
-            Hs_ro = asarray([row for row in self.data.H_ro[dataset_cond].values])
+                # get output-response transfer function for this year
+                Hs_or = asarray([row for row in self.data[abbrv + '_H_or'][dataset_cond].values])
+                # get output-response transfer function for this year
+                Hs_ro = asarray([row for row in self.data[abbrv + '_H_ro'][dataset_cond].values])
 
-            # calculate signal-response transfer functions
-            Hs_sr = Hs_or / H_or_calib
+                # calculate signal-response transfer functions
+                Hs_sr = Hs_or / H_or_calib
 
-            # calculate response-signal transfer functions
-            Hs_rs = Hs_ro / H_ro_calib
+                # calculate response-signal transfer functions
+                Hs_rs = Hs_ro / H_ro_calib
 
-            coh = Hs_sr * Hs_rs
+                coh = Hs_sr * Hs_rs
 
-            newdata = dict(H_sr = [row for row in Hs_sr],
-                           H_rs = [row for row in Hs_rs],
-                           coherence = [row for row in coh])
+                newdata = {
+                    abbrv + '_H_sr': [row for row in Hs_sr],
+                    abbrv + '_H_rs': [row for row in Hs_rs],
+                    abbrv + '_coherence': [row for row in coh]
+                }
 
-            # add data to DataFrame
-            self.add_data(dataset_cond, newdata)
+                # add data to DataFrame
+                self.add_data(dataset_cond, newdata)
 
 
         # save DataFrame to file
         self.data_to_file()
 
 
-    def average_duplicates(self):
+    def average_duplicates(self, abbrv):
+
         keycols = ['year', 'distance', 'condition', 'height']
 
         uniq_vals = []
         for keycol in keycols:
             uniq_vals.append(unique(self.data.loc[:, keycol].values))
 
+        avg_df = pd.DataFrame()
         for year in uniq_vals[0]:
             for distance in uniq_vals[1]:
                 for condition in uniq_vals[2]:
@@ -255,17 +260,17 @@ class data_cruncher:
                         if not any(filter_cond):
                             continue
 
-                        newrow = dict(
-                            year = year,
-                            condition = condition,
-                            distance = distance,
-                            height = height,
-                            freqs = [self.data.freqs[filter_cond].values[0]],
-                            H_sr = [mean(self.data.H_sr[filter_cond].values, axis=0)]
-                        )
-                        self.avg_data = self.avg_data.append(pd.DataFrame(newrow), ignore_index=True)
+                        newrow = {
+                            'year': year,
+                            'condition': condition,
+                            'distance': distance,
+                            'height': height,
+                            'transfer_freqs': [self.data.transfer_freqs[filter_cond].values[0]],
+                            abbrv + '_H_sr': [mean(self.data.transfer_H_sr[filter_cond].values, axis=0)]
+                        }
+                        avg_df = avg_df.append(pd.DataFrame(newrow), ignore_index=True)
 
-        self.avg_data_to_file()
+        return avg_df
 
 
     def add_data(self, rowidx, rowdata):
@@ -276,14 +281,6 @@ class data_cruncher:
                 self.data[colkey] = None
 
             self.data.loc[rowidx, colkey] = rowdata[colkey]
-
-
-    def avg_data_to_file(self):
-        self.data_to_file(self.avg_data_file, self.avg_data)
-
-
-    def avg_data_from_file(self):
-        self.avg_data = self.data_from_file(self.avg_data_file)
 
 
     def data_to_file(self, filename = None, data = None):
@@ -304,56 +301,51 @@ class data_cruncher:
 
 
     def data_from_file(self, filename = None):
+
+
         if filename is None:
             filename = self.data_file
 
         savefile = os.path.join(*pkl_path, filename)
+
+        print('Loading data from ' + savefile)
         if os.path.exists(savefile):
-            print('Loading data from ' + savefile)
             with open(savefile, 'rb') as fobj:
                 data = pickle.load(fobj)
             fobj.close()
 
-            if filename == self.data_file:
-                self.data = data
-            else:
-                return data
+            return data
         else:
-            print('WARN: No master file found.')
+            print('WARN: No data file found. Returning empty DataFrame')
+            return pd.DataFrame(dict(data_folder = []))
 
 
 if __name__ == '__main__':
 
     cruncher = data_cruncher()
 
-    if 'gather' in sys.argv:
+    datasets = dict(
+        #calls = 'stimulus-rectangular-traces'
+        transfer = 'transferfunction-traces'
+    )
+
+    if 'digest' in sys.argv:
         # add folders to be processed
-        cruncher.gather_folders('2016')
-        cruncher.gather_folders('2015')
-
-
-        # load data from .pkl file if it exists
-        cruncher.data_from_file()
+        cruncher.gather_folders(['2015', '2016'])
 
         # iterate through all new folders and calc spectra from raw traces
-        cruncher.digest_rawdata('transferfunction-traces')
+        cruncher.digest_rawdata(datasets)
 
     elif 'calculate' in sys.argv:
-        # load DataFrame from file
-        cruncher.data_from_file()
-
         cruncher.add_relevant_metadata()
-        cruncher.calculate_stuff()
-
-    elif 'average' in sys.argv:
-        cruncher.data_from_file()
-        cruncher.average_duplicates()
+        cruncher.calculate_stuff(datasets.keys())
 
     elif 'plot' in sys.argv:
-        cruncher.avg_data_from_file()
+
+        avg_data = cruncher.average_duplicates(abbrv = 'transfer')
 
         figs = dict()
-        for rowidx, rowdata in cruncher.avg_data.iterrows():
+        for rowidx, rowdata in avg_data.iterrows():
             print('Plot row', rowidx, '-', rowdata.distance, 'cm')
 
             figid = (rowdata.condition, 'height:'+str(rowdata.height), 'year:'+str(rowdata.year))
@@ -361,12 +353,12 @@ if __name__ == '__main__':
                 plt.figure(str(figid))
                 figs[figid] = plt.subplot()
 
-            figs[figid].plot(rowdata.freqs, rowdata.H_sr, label=rowdata.distance)
+            figs[figid].plot(rowdata.transfer_freqs, abs(rowdata.transfer_H_sr), label=rowdata.distance)
+            figs[figid].set_xlim(5000, 30000)
             plt.legend()
 
         plt.show()
 
 
     else:
-        cruncher.data_from_file()
         embed()
