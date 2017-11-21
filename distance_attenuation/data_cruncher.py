@@ -8,6 +8,7 @@ import gc
 import sys
 from glob import glob
 from IPython import embed
+import matplotlib; matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import matplotlib.mlab as ml
 
@@ -15,11 +16,12 @@ import matplotlib.mlab as ml
 class data_cruncher:
 
     data_file = 'data.pkl'
+    avg_data_file = 'avg_data.pkl'
 
     def __init__(self):
         self.folder_list = []
-        self.index = None
         self.data = pd.DataFrame()
+        self.avg_data = pd.DataFrame()
 
 
     def gather_folders(self, year):
@@ -34,18 +36,18 @@ class data_cruncher:
             exit()
 
 
-    def digest_rawdata(self):
+    def digest_rawdata(self, dat_file, abbrv):
 
         # check if DataFrame contains any data was loaded and if not, warn user that any existing  data
         # on the data path will be overwritten in the process
         if self.data.empty:
             confirmation = input('WARNING: if you continue, the current '+self.data_file+' will be overwritten! Confirm? (Y/n): ')
-            if confirmation.lower() == 'y':
-                self.data['data_dir'] = None
-                self.data['data_folder'] = None
-                self.data['digested'] = None
-            else:
+            if confirmation.lower() != 'y':
                 exit()
+
+        self.data['data_dir'] = None
+        self.data['data_folder'] = None
+        self.data['digested'] = None
 
         # add folders that are not already included in DataFrame
         for data_path in self.folder_list:
@@ -69,11 +71,10 @@ class data_cruncher:
                 print('Info.dat missing')
 
             # load recordings of white-noise stimuli
-            transfer_file = os.path.join(*data_path, 'transferfunction-traces.dat')
+            transfer_file = os.path.join(*data_path, dat_file+'.dat')
             if not os.path.exists(transfer_file):
-                print('transferfunction-traces.dat missing')
+                print(dat_file+'.dat missing')
                 exit()
-
 
 
             Pxxs = []
@@ -128,12 +129,8 @@ class data_cruncher:
             del Pxxs, Pyys, Pxys, Pyxs, f, transfer_data, rec_info, trial_data
             gc.collect()
 
-            # save DataFrameto file every once in a while
-            if rowidx % 10 == 0:
-                self.data_to_file()
-
-        # save DataFrame to file
-        self.data_to_file()
+            # save to file
+            self.data_to_file()
 
 
     def extract_metadata(self, rawstr):
@@ -145,7 +142,8 @@ class data_cruncher:
         # and adds it to the DataFrame
 
         print('Add metadata information...')
-        for rowidx, metadata, trialmeta in zip(self.data.index, self.data.metadata, self.data.trialmeta):
+        for rowidx, row in self.data.iterrows():
+            metadata = row.metadata
 
             newdata = dict(condition = self.extract_metadata(metadata[0]['Recording']['Condition']),
                            distance = float(self.extract_metadata(metadata[0]['Recording']['Distance'])[:-2]),
@@ -163,29 +161,24 @@ class data_cruncher:
     def calculate_stuff(self):
 
         print('Calculate output-response transfer functions...')
-        for rowidx, freqs, Pxxs, Pyys, Pxys, Pyxs in zip(self.data.index,
-                                                         self.data.freqs,
-                                                         self.data.Pxxs,
-                                                         self.data.Pyys,
-                                                         self.data.Pxys,
-                                                         self.data.Pyxs):
+        for rowidx, rowdata in self.data.iterrows():
 
             newdata = dict()
             # mean PSD(output)
-            newdata['Pxx'] = mean(Pxxs, axis=0)
-            newdata['Pxx_sd'] = std(Pxxs, axis=0)
+            newdata['Pxx'] = mean(rowdata.Pxxs, axis=0)
+            newdata['Pxx_sd'] = std(rowdata.Pxxs, axis=0)
 
             # mean PSD(response)
-            newdata['Pyy'] = mean(Pyys, axis=0)
-            newdata['Pyy_sd'] = std(Pyys, axis=0)
+            newdata['Pyy'] = mean(rowdata.Pyys, axis=0)
+            newdata['Pyy_sd'] = std(rowdata.Pyys, axis=0)
 
             # mean CSD(output, response)
-            newdata['Pxy'] = mean(Pxys, axis=0)
-            newdata['Pxy_sd'] = std(Pxys, axis=0)
+            newdata['Pxy'] = mean(rowdata.Pxys, axis=0)
+            newdata['Pxy_sd'] = std(rowdata.Pxys, axis=0)
 
             # mean CSD(response, output)
-            newdata['Pyx'] = mean(Pyxs, axis=0)
-            newdata['Pyx_sd'] = std(Pyxs, axis=0)
+            newdata['Pyx'] = mean(rowdata.Pyxs, axis=0)
+            newdata['Pyx_sd'] = std(rowdata.Pyxs, axis=0)
 
             # output-response transfer
             newdata['H_or'] = abs(newdata['Pxy']) / newdata['Pxx']
@@ -202,7 +195,7 @@ class data_cruncher:
         self.data_to_file()
 
 
-        print('Calculate signal-response transfer functions...')
+        print('Calculate signal-response transfer functions and coherence...')
         # conditions for calibration-recordings (smallest distance in an open environment)
         calib_cond = {
             2015: (self.data.distance == 50) & (self.data.condition == 'Cutmeadow'),
@@ -215,40 +208,94 @@ class data_cruncher:
 
             # calculate mean output-response transfer function for equipment during this year
             # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
-            embed()
             H_or_calib = mean(self.data.H_or[calib_cond[year] & dataset_cond].values, axis=0)
+            H_ro_calib = mean(self.data.H_ro[calib_cond[year] & dataset_cond].values, axis=0)
 
             # get output-response transfer function for this year
-            Hs_or = asarray([line for line in self.data.H_or[dataset_cond].values])
+            Hs_or = asarray([row for row in self.data.H_or[dataset_cond].values])
+            # get output-response transfer function for this year
+            Hs_ro = asarray([row for row in self.data.H_ro[dataset_cond].values])
 
             # calculate signal-response transfer functions
             Hs_sr = Hs_or / H_or_calib
 
-            newdata = dict(H_sr = [row for row in Hs_sr])
+            # calculate response-signal transfer functions
+            Hs_rs = Hs_ro / H_ro_calib
+
+            coh = Hs_sr * Hs_rs
+
+            newdata = dict(H_sr = [row for row in Hs_sr],
+                           H_rs = [row for row in Hs_rs],
+                           coherence = [row for row in coh])
 
             # add data to DataFrame
             self.add_data(dataset_cond, newdata)
+
 
         # save DataFrame to file
         self.data_to_file()
 
 
-    def add_data(self, rowidx, row_content):
+    def average_duplicates(self):
+        keycols = ['year', 'distance', 'condition', 'height']
+
+        uniq_vals = []
+        for keycol in keycols:
+            uniq_vals.append(unique(self.data.loc[:, keycol].values))
+
+        for year in uniq_vals[0]:
+            for distance in uniq_vals[1]:
+                for condition in uniq_vals[2]:
+                    for height in uniq_vals[3]:
+                        filter_cond = (self.data.year == year) & \
+                                      (self.data.condition == condition) & \
+                                      (self.data.distance == distance) & \
+                                      (self.data.height == height)
+
+                        if not any(filter_cond):
+                            continue
+
+                        newrow = dict(
+                            year = year,
+                            condition = condition,
+                            distance = distance,
+                            height = height,
+                            freqs = [self.data.freqs[filter_cond].values[0]],
+                            H_sr = [mean(self.data.H_sr[filter_cond].values, axis=0)]
+                        )
+                        self.avg_data = self.avg_data.append(pd.DataFrame(newrow), ignore_index=True)
+
+        self.avg_data_to_file()
+
+
+    def add_data(self, rowidx, rowdata):
         # expects newdata to be dictionary and adds dict-entries to specified row of DataFrame
 
-        for colkey in row_content.keys():
+        for colkey in rowdata.keys():
             if colkey not in self.data.columns:
                 self.data[colkey] = None
 
-            self.data.loc[rowidx, colkey] = row_content[colkey]
+            self.data.loc[rowidx, colkey] = rowdata[colkey]
 
 
-    def data_to_file(self):
+    def avg_data_to_file(self):
+        self.data_to_file(self.avg_data_file, self.avg_data)
+
+
+    def avg_data_from_file(self):
+        self.avg_data = self.data_from_file(self.avg_data_file)
+
+
+    def data_to_file(self, filename = None, data = None):
+        if filename is None:
+            filename = self.data_file
+            data = self.data
+
         savepath = os.path.join(*pkl_path)
         if os.path.exists(savepath):
-            print('Saving data to ' + os.path.join(savepath, self.data_file))
-            with open(os.path.join(savepath, self.data_file), 'wb') as fobj:
-                pickle.dump(self.data, fobj, protocol=pickle.HIGHEST_PROTOCOL)
+            print('Saving data to ' + os.path.join(savepath, filename))
+            with open(os.path.join(savepath, filename), 'wb') as fobj:
+                pickle.dump(data, fobj, protocol=pickle.HIGHEST_PROTOCOL)
             fobj.close()
         else:
             print('Creating directory ' + savepath)
@@ -256,13 +303,21 @@ class data_cruncher:
             self.data_to_file()
 
 
-    def data_from_file(self):
-        savefile = os.path.join(*pkl_path, self.data_file)
+    def data_from_file(self, filename = None):
+        if filename is None:
+            filename = self.data_file
+
+        savefile = os.path.join(*pkl_path, filename)
         if os.path.exists(savefile):
             print('Loading data from ' + savefile)
             with open(savefile, 'rb') as fobj:
-                self.data = pickle.load(fobj)
+                data = pickle.load(fobj)
             fobj.close()
+
+            if filename == self.data_file:
+                self.data = data
+            else:
+                return data
         else:
             print('WARN: No master file found.')
 
@@ -281,13 +336,37 @@ if __name__ == '__main__':
         cruncher.data_from_file()
 
         # iterate through all new folders and calc spectra from raw traces
-        cruncher.digest_rawdata()
+        cruncher.digest_rawdata('transferfunction-traces')
 
-        embed()
     elif 'calculate' in sys.argv:
+        # load DataFrame from file
         cruncher.data_from_file()
+
         cruncher.add_relevant_metadata()
         cruncher.calculate_stuff()
+
+    elif 'average' in sys.argv:
+        cruncher.data_from_file()
+        cruncher.average_duplicates()
+
+    elif 'plot' in sys.argv:
+        cruncher.avg_data_from_file()
+
+        figs = dict()
+        for rowidx, rowdata in cruncher.avg_data.iterrows():
+            print('Plot row', rowidx, '-', rowdata.distance, 'cm')
+
+            figid = (rowdata.condition, 'height:'+str(rowdata.height), 'year:'+str(rowdata.year))
+            if figid not in figs.keys():
+                plt.figure(str(figid))
+                figs[figid] = plt.subplot()
+
+            figs[figid].plot(rowdata.freqs, rowdata.H_sr, label=rowdata.distance)
+            plt.legend()
+
+        plt.show()
+
+
     else:
         cruncher.data_from_file()
         embed()
