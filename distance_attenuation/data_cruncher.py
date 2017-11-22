@@ -11,8 +11,11 @@ import pickle
 from pyrelacs.DataClasses import load as pyre_load
 import sys
 
-# plotting
+# matplotlib plotting
 matplotlib.use('Qt5Agg')
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import matplotlib.pyplot as plt
 
 
@@ -80,7 +83,7 @@ class data_cruncher:
                             condition = condition,
                             distance = distance,
                             height = height,
-                            transfer_freqs = [self.data.freqs[filter_cond].values[0]],
+                            freqs = [self.data.freqs[filter_cond].values[0]],
                             H_sr =  [mean(self.data.H_sr[filter_cond].values, axis=0)]
                         )
 
@@ -197,7 +200,10 @@ class data_cruncher:
             return pd.DataFrame(dict(data_folder = []))
 
 
-    def digest_rawdata(self, dat_file):
+    def digest_rawdata(self, dat_file, sd_params = None):
+        if sd_params is None:
+            nfft = 2 ** 11
+            sd_params = {'NFFT': nfft, 'noverlap': nfft / 2}
 
         # iterate through all folders that have not already been processed
         cond = self.data.loc[:, 'digested'] == False
@@ -234,14 +240,13 @@ class data_cruncher:
                 traces = asarray([row.split() for row in trial_data[-1]], dtype=float).transpose()
 
                 # get data for spectral analysis
-                sr = 1000. / mean(diff(traces[0, :]))
+                sr = round(1000. / mean(diff(traces[0, :])))
                 output = traces[1, :]
                 output -= mean(output)
                 response = traces[2, :]
                 response -= mean(response)
 
-                nfft = 2 ** 11
-                sd_params = {'Fs': sr, 'NFFT': nfft, 'noverlap': nfft / 2}
+                sd_params['Fs'] = sr
 
                 Pxx, _ = ml.psd(output, **sd_params)
                 Pyy, _ = ml.psd(response, **sd_params)
@@ -323,20 +328,66 @@ if __name__ == '__main__':
         transfer_crunch.calculate_stuff()
 
     elif 'plot' in sys.argv:
+
+        # get data averaged over height, condition, distance and year of recording
         avg_data = transfer_crunch.average_duplicates()
 
         figs = dict()
-        for rowidx, rowdata in avg_data.iterrows():
-            print('Plot row', rowidx, '-', rowdata.distance, 'cm')
+        if False:  # plot 2d
+            for rowidx, rowdata in avg_data.iterrows():
+                print('Plot row', rowidx, '-', rowdata.distance, 'cm')
 
-            figid = (rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
-            if figid not in figs.keys():
-                plt.figure(str(figid))
-                figs[figid] = plt.subplot()
+                figid = ('2d', rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
+                if figid not in figs.keys():
+                    plt.figure(str(figid))
+                    figs[figid] = plt.subplot()
 
-            figs[figid].plot(rowdata.freqs, abs(rowdata.H_sr), label=rowdata.distance)
-            figs[figid].set_xlim(5000, 30000)
-            figs[figid].legend()
+                figs[figid].semilogy(rowdata.freqs, abs(rowdata.H_sr), label=rowdata.distance)
+                figs[figid].set_xlim(5000, 30000)
+                figs[figid].legend()
+
+        if True:  # plot 3d
+
+            # sort data
+            sorted_data = dict()
+            for rowidx, rowdata in avg_data.iterrows():
+                figid = ('3d', rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
+
+                if figid not in sorted_data.keys():
+                    sorted_data[figid] = dict()
+                    sorted_data[figid]['freqs'] = rowdata.freqs
+                    sorted_data[figid]['distance'] = []
+                    sorted_data[figid]['H_sr'] = []
+
+                sorted_data[figid]['distance'].append(rowdata.distance)
+                sorted_data[figid]['H_sr'].append(rowdata.H_sr)
+
+            # plot data in surface plot
+            for figid in sorted_data.keys():
+                figdata = sorted_data[figid]
+                freqs = figdata['freqs']
+                distance = asarray(figdata['distance'])
+                H_sr = abs(asarray(figdata['H_sr']))
+
+                # plot
+                fig = plt.figure(str(figid))
+                figs[figid] = fig.gca(projection='3d')
+
+                freq_range = (freqs >= 5000) & (freqs <= 25000)
+                X, Y = meshgrid(distance, freqs[freq_range])
+                Z = log10(H_sr.transpose()[freq_range, :])
+                surf = figs[figid].plot_surface(X, Y, Z, cmap='viridis', linewidth=0, antialiased=False)
+
+                figs[figid].set_xlabel('Sender-receiver distance [cm]')
+                figs[figid].set_ylabel('Frequency [Hz]')
+                figs[figid].set_zlabel('log10(Gain)')
+
+                # white noise from 5 to 30 kHz, but speakers may have been too weak above 25kHz
+                figs[figid].set_ylim(5000, 25000)
+
+
+
+
 
         plt.show()
 
