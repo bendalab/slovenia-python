@@ -485,8 +485,6 @@ if __name__ == '__main__':
                            metadata=[metadata])
             data = add_data(data, newdata)
 
-            embed()
-
         # save to file
         data_to_file(glob_noise_file, data)
 
