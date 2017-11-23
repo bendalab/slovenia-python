@@ -79,22 +79,30 @@ def gen_new_times(t):
         new_t[i + 1] = new_t[i] + np.random.choice(diffs)
     return new_t
 
-
+# times_1 and times_2 should be numpy arrays with shape (x,) that contain call times in seconds:
 with shelve.open(r'C:\Users\chris\Documents\calltiming_17_11_21\data') as d:
     times_1 = d['0. trace']['CallStart']
     times_2 = d['2. trace']['CallStart']
 
-
-Fs = 100  # Hz
-dt = 1 / Fs  # seconds
+# Sampling rate for binning call times in Hz:
+Fs = 100
+dt = 1 / Fs
+# Sigma of gaussian for convolution:
 sigma = .4
+# Size of x axis of gaussian (-gauss_step * sigma : gauss_step * sigma):
 gauss_step = 5
+# Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
+# Number of cross correlations for boot strapping:
 n_boot = 100
+
 times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
+# Calculate cross correlation between times_1 and times_2:
 corr_lags, corr, logical_1, logical_2 = correlate_calls(times_1, times_2, Fs, sigma, gauss_step, max_lag)
+# Calculate 95% confidence interval for correlation using boot strapping:
 low_conf, up_conf = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
 
+# Plotting:
 fig, ax = plt.subplots(2)
 ax[0].plot(logical_1)
 ax[0].plot(logical_2)
