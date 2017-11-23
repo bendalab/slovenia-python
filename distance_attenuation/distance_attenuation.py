@@ -1,30 +1,105 @@
+# Author: Tim Hladnik
+
 from glob import glob
 from IPython import embed
 import matplotlib.mlab as ml
+#from numba import jit, int32, float64
 from numpy import *
 import os
 import pandas as pd
 import pickle
 from pyrelacs.DataClasses import load as pyre_load
+from scipy import signal
 from scipy.io import wavfile
 import sys
 import wave
 
-###
+
+###############
 # plotting
-import matplotlib
-matplotlib.use('Qt5Agg')
-import matplotlib.pyplot as plt
+###############
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Qt5Agg')
+    import matplotlib.pyplot as plt
 
 
-
-###
+###############
 # globals
+###############
 glob_data_path = ['..', '..', 'data', 'distance_attenuation']
 glob_pkl_path = ['..', '..', 'pkl', 'distance_attenuation']
 
-###
+glob_noise_file = 'noise_data.pkl'
+glob_call_file = 'call_data.pkl'
+
+
+###############
 # methods
+###############
+
+#####
+###
+# bushcricket-call processing by Martin Zeller
+
+def gauss(dt,steps,sigma): # produce gaus array centered on array middle
+    time = arange(-dt*steps,dt*(steps+1),dt)
+    mygauss = exp(-time**2/(2*sigma**2))
+    mygauss = mygauss/np.sum(mygauss)
+    return mygauss
+
+
+def bpfilter_trace(trace,nyq,fLow=7000,fHigh=10000,butterOrder=3): # butterworth bp filter on trace
+    low = fLow/nyq
+    high = fHigh/nyq
+    [b, a] = signal.butter(butterOrder, [low,high],btype='bandpass')
+    filtered = signal.filtfilt(b,a,trace)
+    return filtered
+
+
+def make_env_env(time,env):
+    peaks = findpeaks(env,0.0)
+    xsource = time[peaks]
+    ysource = env[peaks]
+    xsource = np.append(0,xsource)
+    ysource = np.append(0,ysource)
+    xsource = np.append(xsource,np.max(time))
+    ysource = np.append(ysource,0)
+    newy = np.interp(time,xsource,ysource)
+    return newy
+
+
+#@jit(int32[:](float64[:],float64))  # not working in 3.4
+def findpeaks(x,thresh=0.): # find local maxima over certain threshold
+    peaks = np.zeros(len(x),dtype=np.int32)
+    ind = range(1,len(x)-1)
+    c = 0
+    for i in ind:
+        diffFwd = x[i+1]-x[i]
+        diffBwd = x[i]-x[i-1]
+        if diffFwd < 0 and diffBwd > 0 and x[i] > thresh:
+            peaks[c] = i
+            c += 1
+    return peaks[:c]
+
+
+def make_envelope(x,Fs,reduceOrder=10,reduceNo = 2,flow=7000,fhigh=10000,fullEnvelope=False):
+    dt = 1/Fs
+    nyq = 0.5*Fs
+    trace = bpfilter_trace(x,nyq,flow,fhigh)
+    trace = trace**2
+    trace = signal.fftconvolve(trace,gauss(1/Fs,3000,0.005),mode='same')
+    trace = np.sqrt(trace)
+    for i in range(reduceNo):
+        trace = scipy.signal.decimate(trace,reduceOrder,zero_phase=True)
+    if fullEnvelope:
+        time = np.arange(len(trace))
+        trace = make_env_env(time,trace)
+    return trace
+
+#
+###
+#####
 
 def add_data(data, rowdata, rowidx = None):
     # expects two arguments
@@ -52,6 +127,41 @@ def add_data(data, rowdata, rowidx = None):
         data = data.append(pd.DataFrame(rowdata), ignore_index=True)
 
     return data
+
+
+def average_duplicates(data, avg_cols = None):
+
+    keycols = ['year', 'distance', 'condition', 'height']
+
+    uniq_vals = []
+    for keycol in keycols:
+        uniq_vals.append(unique(data.loc[:, keycol].values))
+
+    avg_df = pd.DataFrame()
+    for year in uniq_vals[0]:
+        for distance in uniq_vals[1]:
+            for condition in uniq_vals[2]:
+                for height in uniq_vals[3]:
+                    filter_cond = (data.year == year) & \
+                                  (data.condition == condition) & \
+                                  (data.distance == distance) & \
+                                  (data.height == height)
+
+                    if not any(filter_cond):
+                        continue
+
+                    newrow = dict(
+                        year = year,
+                        condition = condition,
+                        distance = distance,
+                        height = height,
+                        freqs = [data.freqs[filter_cond].values[0]],
+                        H_sr =  [mean(data.H_sr[filter_cond].values, axis=0)]
+                    )
+
+                    avg_df = avg_df.append(pd.DataFrame(newrow), ignore_index=True)
+
+    return avg_df
 
 
 def calc_spectra(x, y, sr, params = None):
@@ -245,6 +355,7 @@ def read_call_traces(folderpath, nfft = None):
 
     return asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
 
+
 def read_noise_traces(folderpath, nfft = None):
     metadata, traces = load_traces_dat(folderpath, 'transferfunction-traces.dat')
 
@@ -292,56 +403,15 @@ def sanitize_string(instr):
     return outstr
 
 
-###
+###############
 # run script
+###############
 
 if __name__ == '__main__':
 
-    # trial with band-limited white noise
-    if 'load_noise' in sys.argv:
-
-        # initiate DataFrame
-        data = pd.DataFrame()
-
-        pkl_file = 'noise_data.pkl'
-
-        # get folders
-        folder_list = gather_folders(['2015', '2016'])
-
-        entry_num = len(folder_list)
-        for idx, folder in enumerate(folder_list):
-            print('Entry', idx+1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
-
-            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
-
-            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
-
-        data_to_file(pkl_file, data)
-
     ###
-    # trials with recorded bushcricket calls
-    elif 'load_call' in sys.argv:
-
-        # initiate DataFrame
-        data = pd.DataFrame()
-
-        pkl_file = 'call_data.pkl'
-
-        # get folders
-        folder_list = gather_folders(['2016'])
-
-        entry_num = len(folder_list)
-        for idx, folder in enumerate(folder_list):
-            print('Entry', idx + 1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
-
-            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
-
-            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
-
-        data_to_file(pkl_file, data)
-
     # for testing
-    else:
+    if 'test' in sys.argv:
 
         sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
@@ -355,13 +425,74 @@ if __name__ == '__main__':
         embed()
 
         plt.figure()
-        plt.subplot(2,1,1)
+        plt.subplot(2, 1, 1)
         plt.plot(t_out, output)
 
-        plt.subplot(2,1,2)
+        plt.subplot(2, 1, 2)
         for rec in recordings:
             plt.plot(t_rec, rec)
 
         plt.show()
+
+    ###
+    # trial with band-limited white noise
+    if 'load_noise' in sys.argv:
+
+        # initiate DataFrame
+        data = pd.DataFrame()
+
+        # get folders
+        folder_list = gather_folders(['2015', '2016'])
+
+        entry_num = len(folder_list)
+        for idx, folder in enumerate(folder_list):
+            print('Entry', idx+1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
+
+            # get spectra for stimulus condition
+            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+
+            # add row to DataFrame
+            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+
+        # save to file
+        data_to_file(glob_noise_file, data)
+
+        # calculate transfer functions
+        data = calc_H_sign_resp(calc_H_out_resp(data))
+        data_to_file(glob_noise_file, data)
+
+
+    ###
+    # trials with recorded bushcricket calls
+    if 'load_call' in sys.argv:
+
+        # initiate DataFrame
+        data = pd.DataFrame()
+
+        # get folders
+        folder_list = gather_folders(['2016'])
+
+        entry_num = len(folder_list)
+        for idx, folder in enumerate(folder_list):
+            print('Entry', idx + 1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
+
+            # get spectra for stimulus condition
+            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+
+            # todo: add a downsampled version of signal envelope in time-domain for visualization
+
+            # add row to DataFrame
+            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+
+        # save to file
+        data_to_file(glob_call_file, data)
+
+        # calculate transfer functions
+        data = calc_H_sign_resp(calc_H_out_resp(data))
+        data_to_file(glob_call_file, data)
+
+
+
+
 
 
