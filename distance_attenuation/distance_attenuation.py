@@ -74,7 +74,7 @@ def load_info_dat(folderpath):
 
 
 def load_traces_dat(folderpath, filename):
-    traces_file = os.path.join([*glob_data_path, *folderpath, filename])
+    traces_file = os.path.join([*glob_data_path, *folderpath, filename] )
     if not os.path.exists(traces_file):
         print('ERROR: no *-traces.dat -', traces_file)
         exit()
