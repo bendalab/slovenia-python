@@ -65,7 +65,7 @@ def calc_spectra(x, y, sr, params = None):
 
 
 def load_info_dat(folderpath):
-    info_file = os.path.join(*folderpath, 'info.dat')
+    info_file = os.path.join([*folderpath, 'info.dat'])
     if not os.path.exists(info_file):
         print('ERROR: no info.dat -', info_file)
         exit()
@@ -74,7 +74,7 @@ def load_info_dat(folderpath):
 
 
 def load_traces_dat(folderpath, filename):
-    traces_file = os.path.join(*glob_data_path, *folderpath, filename)
+    traces_file = os.path.join([*glob_data_path, *folderpath, filename])
     if not os.path.exists(traces_file):
         print('ERROR: no *-traces.dat -', traces_file)
         exit()
