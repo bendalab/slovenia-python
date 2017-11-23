@@ -10,6 +10,13 @@ from scipy.io import wavfile
 import sys
 import wave
 
+###
+# plotting
+import matplotlib
+matplotlib.use('Qt5Agg')
+import matplotlib.pyplot as plt
+
+
 
 ###
 # globals
@@ -290,36 +297,71 @@ def sanitize_string(instr):
 
 if __name__ == '__main__':
 
+    # trial with band-limited white noise
     if 'load_noise' in sys.argv:
 
+        # initiate DataFrame
         data = pd.DataFrame()
 
         pkl_file = 'noise_data.pkl'
 
+        # get folders
         folder_list = gather_folders(['2015', '2016'])
 
         entry_num = len(folder_list)
         for idx, folder in enumerate(folder_list):
             print('Entry', idx+1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
+
             Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
 
             data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
 
         data_to_file(pkl_file, data)
 
+    ###
+    # trials with recorded bushcricket calls
     elif 'load_call' in sys.argv:
+
+        # initiate DataFrame
+        data = pd.DataFrame()
+
+        pkl_file = 'call_data.pkl'
+
+        # get folders
+        folder_list = gather_folders(['2016'])
+
+        entry_num = len(folder_list)
+        for idx, folder in enumerate(folder_list):
+            print('Entry', idx + 1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
+
+            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+
+            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+
+        data_to_file(pkl_file, data)
+
+    # for testing
+    else:
 
         sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
-        t_out = arange(0, output.shape[0]/sr_out, 1./sr_out)
+        t_out = arange(0, output.shape[0] / sr_out, 1. / sr_out)
 
-        metadata, traces = load_traces_dat(['2016', '2016-07-21-ae-meadow'], 'stimulus-file-traces.dat')
-        mtrace = mean(asarray([t[1, :] for t in traces]), axis = 0)
+        metadata, traces = load_traces_dat(['2016', '2016-07-22-aa-open'], 'stimulus-file-traces.dat')
+        recordings = asarray([t[1, :] for t in traces])
         sr_rec = round(1000. / mean(diff(traces[0][0, :])))
-        t_rec = arange(0, mtrace.shape[0]/sr_rec, 1./sr_rec)
-
-
+        t_rec = arange(0, recordings.shape[1] / sr_rec, 1. / sr_rec)
 
         embed()
-    else:
-        embed()
+
+        plt.figure()
+        plt.subplot(2,1,1)
+        plt.plot(t_out, output)
+
+        plt.subplot(2,1,2)
+        for rec in recordings:
+            plt.plot(t_rec, rec)
+
+        plt.show()
+
+
