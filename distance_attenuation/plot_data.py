@@ -2,6 +2,7 @@ from distance_attenuation import *
 from IPython import embed
 from numpy import *
 import pandas as pd
+import sys
 
 
 ###
@@ -31,6 +32,8 @@ if __name__ == '__main__':
             figs[figid].semilogy(rowdata.freqs, abs(rowdata.H_sr), label=rowdata.distance)
             figs[figid].set_xlim(5000, 30000)
             figs[figid].legend()
+
+        plt.show()
 
     if '3d' in sys.argv:
         # sort data
@@ -66,3 +69,5 @@ if __name__ == '__main__':
             figs[figid].set_xlabel('Sender-receiver distance [cm]')
             figs[figid].set_ylabel('Frequency [Hz]')
             figs[figid].set_zlabel('log10(Gain)')
+
+        plt.show()

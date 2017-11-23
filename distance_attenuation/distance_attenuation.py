@@ -436,12 +436,14 @@ if __name__ == '__main__':
 
         sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
-        t_out = arange(0, output.shape[0] / sr_out, 1. / sr_out)
 
-        metadata, traces = load_traces_dat(['2016', '2016-07-22-aa-open'], 'stimulus-file-traces.dat')
+        metadata, traces = load_traces_dat(['2016', '2016-07-22-ad-open'], 'stimulus-file-traces.dat')
         recordings = asarray([t[1, :] for t in traces])
         sr_rec = round(1000. / mean(diff(traces[0][0, :])))
         t_rec = arange(0, recordings.shape[1] / sr_rec, 1. / sr_rec)
+
+
+        t_out = arange(0, output.shape[0] / sr_rec, 1. / sr_rec)
 
         embed()
 
