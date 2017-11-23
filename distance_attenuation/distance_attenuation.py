@@ -6,7 +6,9 @@ import os
 import pandas as pd
 import pickle
 from pyrelacs.DataClasses import load as pyre_load
+from scipy.io import wavfile
 import sys
+import wave
 
 
 ###
@@ -56,6 +58,9 @@ def calc_spectra(x, y, sr, params = None):
         params = {'NFFT': nfft, 'noverlap': nfft / 2}
     if not isinstance(params, dict):
         print('ERROR: params in calc_spectra() is not a dictionary.')
+
+    x = x - mean(x)
+    y = y - mean(y)
 
     Pxx, _ = ml.psd(x, Fs=sr, **params)
     Pyy, _ = ml.psd(y, Fs=sr, **params)
@@ -202,6 +207,37 @@ def load_traces_dat(folderpath, filename):
     return metadata, traces
 
 
+def read_call_traces(folderpath, nfft = None):
+
+    # get recorded data
+    metadata, traces = load_traces_dat(folderpath, 'stimulus-file-traces.dat')
+
+    # get stimulus file contents (recording of a pholidoptera call)
+    sr, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
+    output = data[:, 0]  # use first channel
+
+    Pxxs = []
+    Pyys = []
+    Pxys = []
+    Pyxs = []
+    print('Processing trials ...')
+    for t in traces:
+
+        # get recordings
+        sr = round(1000. / mean(diff(t[0, :])))
+        response = t[1, :]
+
+        # get spectra
+        Pxx, Pyy, Pxy, Pyx, f = calc_spectra(output, response, sr, nfft)
+
+        Pxxs.append(Pxx)
+        Pyys.append(Pyy)
+        Pxys.append(Pxy)
+        Pyxs.append(Pyx)
+    freqs = f
+
+    return asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
+
 def read_noise_traces(folderpath, nfft = None):
     metadata, traces = load_traces_dat(folderpath, 'transferfunction-traces.dat')
 
@@ -270,3 +306,20 @@ if __name__ == '__main__':
             data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
 
         data_to_file(pkl_file, data)
+
+    elif 'load_call' in sys.argv:
+
+        sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
+        output = data[:, 0]  # use first channel
+        t_out = arange(0, output.shape[0]/sr_out, 1./sr_out)
+
+        metadata, traces = load_traces_dat(['2016', '2016-07-21-ae-meadow'], 'stimulus-file-traces.dat')
+        mtrace = mean(asarray([t[1, :] for t in traces]), axis = 0)
+        sr_rec = round(1000. / mean(diff(traces[0][0, :])))
+        t_rec = arange(0, mtrace.shape[0]/sr_rec, 1./sr_rec)
+
+
+
+        embed()
+    else:
+        embed()
