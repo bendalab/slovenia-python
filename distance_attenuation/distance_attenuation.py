@@ -129,6 +129,27 @@ def add_data(data, rowdata, rowidx = None):
     return data
 
 
+def add_metadata(data):
+    # takes importan metadata from the dictionaries (as provided by pyrelacs)
+    # and adds it to the DataFrame
+
+    print('Add metadata information...')
+    for rowidx, row in data.iterrows():
+        metadata = row.metadata
+
+        newdata = dict(condition=sanitize_string(metadata[0]['Recording']['Condition']),
+                       distance=float(sanitize_string(metadata[0]['Recording']['Distance'])[:-2]),
+                       height=float(sanitize_string(metadata[0]['Recording']['Height'])[:-2]),
+                       temperature=sanitize_string(metadata[0]['Recording']['Temperature']),
+                       date=sanitize_string(metadata[0]['Recording']['Date']),
+                       year=float(sanitize_string(metadata[0]['Recording']['Date'])[:4]))
+
+        # add to dataframe
+        data = add_data(data, newdata, rowidx)
+
+    return data
+
+
 def average_duplicates(data, avg_cols = None):
 
     keycols = ['year', 'distance', 'condition', 'height']
@@ -299,7 +320,7 @@ def data_from_file(pkl_file):
 
 
 def load_info_dat(folderpath):
-    info_file = os.path.join(*(folderpath + ['info.dat']))
+    info_file = os.path.join(*(glob_data_path + folderpath + ['info.dat']))
     if not os.path.exists(info_file):
         print('ERROR: no info.dat -', info_file)
         exit()
@@ -380,7 +401,7 @@ def read_noise_traces(folderpath, nfft = None):
         Pyxs.append(Pyx)
     freqs = f
 
-    return asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
+    return metadata, asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
 
 
 def gather_folders(years):
@@ -448,14 +469,29 @@ if __name__ == '__main__':
         for idx, folder in enumerate(folder_list):
             print('Entry', idx+1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
 
+            # recording metadata
+            metadata = load_info_dat(folder[-2:])
+
             # get spectra for stimulus condition
-            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
 
             # add row to DataFrame
-            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+            newdata = dict(Pxxs=[Pxxs],
+                           Pyys=[Pyys],
+                           Pxys=[Pxys],
+                           Pyxs=[Pyxs],
+                           freqs=[freqs],
+                           trialmeta=[trialmeta],
+                           metadata=[metadata])
+            data = add_data(data, newdata)
+
+            embed()
 
         # save to file
         data_to_file(glob_noise_file, data)
+
+        # extract metadata from RELACS output
+        data = add_metadata(data)
 
         # calculate transfer functions
         data = calc_H_sign_resp(calc_H_out_resp(data))
@@ -487,11 +523,14 @@ if __name__ == '__main__':
         # save to file
         data_to_file(glob_call_file, data)
 
+        # extract metadata from RELACS output
+        data = add_metadata(data)
+
         # calculate transfer functions
         data = calc_H_sign_resp(calc_H_out_resp(data))
         data_to_file(glob_call_file, data)
 
-
+    embed()
 
 
 
