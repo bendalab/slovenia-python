@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
         pkl_file = 'noise_data.pkl'
 
-        folder_list = gather_folders(['2015', '2016'])[:3]
+        folder_list = gather_folders(['2015', '2016'])
 
         entry_num = len(folder_list)
         for idx, folder in enumerate(folder_list):
