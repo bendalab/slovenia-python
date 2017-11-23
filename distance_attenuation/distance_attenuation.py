@@ -61,17 +61,17 @@ def make_env_env(time,env):
     peaks = findpeaks(env,0.0)
     xsource = time[peaks]
     ysource = env[peaks]
-    xsource = np.append(0,xsource)
-    ysource = np.append(0,ysource)
-    xsource = np.append(xsource,np.max(time))
-    ysource = np.append(ysource,0)
-    newy = np.interp(time,xsource,ysource)
+    xsource = append(0,xsource)
+    ysource = append(0,ysource)
+    xsource = append(xsource,max(time))
+    ysource = append(ysource,0)
+    newy = interp(time,xsource,ysource)
     return newy
 
 
 #@jit(int32[:](float64[:],float64))  # not working in 3.4
 def findpeaks(x,thresh=0.): # find local maxima over certain threshold
-    peaks = np.zeros(len(x),dtype=np.int32)
+    peaks = np.zeros(len(x),dtype=int32)
     ind = range(1,len(x)-1)
     c = 0
     for i in ind:
@@ -89,11 +89,11 @@ def make_envelope(x,Fs,reduceOrder=10,reduceNo = 2,flow=7000,fhigh=10000,fullEnv
     trace = bpfilter_trace(x,nyq,flow,fhigh)
     trace = trace**2
     trace = signal.fftconvolve(trace,gauss(1/Fs,3000,0.005),mode='same')
-    trace = np.sqrt(trace)
+    trace = sqrt(trace)
     for i in range(reduceNo):
-        trace = scipy.signal.decimate(trace,reduceOrder,zero_phase=True)
+        trace = signal.decimate(trace,reduceOrder,zero_phase=True)
     if fullEnvelope:
-        time = np.arange(len(trace))
+        time = arange(len(trace))
         trace = make_env_env(time,trace)
     return trace
 
@@ -461,6 +461,13 @@ if __name__ == '__main__':
     # trial with band-limited white noise
     if 'load_noise' in sys.argv:
 
+        nfft = None
+        if len(sys.argv) > 2:
+            try:
+                nfft = int(sys.argv[-1])
+            except:
+                print('WARNING: invalid NFFT parameter in script call.')
+
         # initiate DataFrame
         data = pd.DataFrame()
 
@@ -475,7 +482,7 @@ if __name__ == '__main__':
             metadata = load_info_dat(folder[-2:])
 
             # get spectra for stimulus condition
-            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:], nfft=nfft)
 
             # add row to DataFrame
             newdata = dict(Pxxs=[Pxxs],
@@ -488,7 +495,7 @@ if __name__ == '__main__':
             data = add_data(data, newdata)
 
         # save to file
-        data_to_file(glob_noise_file, data)
+        data_to_file('nfft' + str(nfft) + glob_noise_file, data)
 
         # extract metadata from RELACS output
         data = add_metadata(data)
@@ -530,7 +537,7 @@ if __name__ == '__main__':
         data = calc_H_sign_resp(calc_H_out_resp(data))
         data_to_file(glob_call_file, data)
 
-    embed()
+    #embed()
 
 
 
