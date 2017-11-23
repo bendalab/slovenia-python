@@ -65,6 +65,86 @@ def calc_spectra(x, y, sr, params = None):
     return Pxx, Pyy, Pxy, Pyx, f
 
 
+def calc_H_out_resp(data):
+
+    print('Calculate output-response transfer functions...')
+    for rowidx, rowdata in data.iterrows():
+
+        newdata = dict()
+
+        # mean PSD(output)
+        newdata['Pxx'] = mean(rowdata['Pxxs'], axis=0)
+        newdata['Pxx_sd'] = std(rowdata['Pxxs'], axis=0)
+
+        # mean PSD(response)
+        newdata['Pyy'] = mean(rowdata['Pyys'], axis=0)
+        newdata['Pyy_sd'] = std(rowdata['Pyys'], axis=0)
+
+        # mean CSD(output, response)
+        newdata['Pxy'] = mean(rowdata['Pxys'], axis=0)
+        newdata['Pxy_sd'] = std(rowdata['Pxys'], axis=0)
+
+        # mean CSD(response, output)
+        newdata['Pyx'] = mean(rowdata['Pyxs'], axis=0)
+        newdata['Pyx_sd'] = std(rowdata['Pyxs'], axis=0)
+
+        # output-response transfer
+        newdata['H_or'] = newdata['Pxy'] / newdata['Pxx']
+        newdata['H_or_sd'] = newdata['Pxy_sd'] / newdata['Pxx_sd']
+
+        # response-output transfer
+        newdata['H_ro'] = newdata['Pyx'] / newdata['Pyy']
+        newdata['H_ro_sd'] = newdata['Pyx_sd'] / newdata['Pyy_sd']
+
+        # add data
+        data = add_data(data, newdata, rowidx)
+
+    return data
+
+
+def calc_H_sign_resp(data):
+
+    print('Calculate signal-response transfer functions and coherence...')
+    # conditions for calibration-recordings (smallest distance in an open environment)
+    calib_cond = {
+        2015: (data.distance == 50) & (data.condition == 'Cutmeadow'),
+        2016: (data.distance == 100) & (data.condition == 'Open')
+    }
+
+    for year in calib_cond.keys():
+        # basic condition for all datasets
+        dataset_rows = (data.year == year)
+
+        # calculate mean output-response transfer function for equipment during this year
+        # using the recordings made in the open with the smallest speaker-microphone distance (50 and 100cm)
+        H_or_calib = mean(data.H_or[calib_cond[year] & dataset_rows].values, axis=0)
+        H_ro_calib = mean(data.H_ro[calib_cond[year] & dataset_rows].values, axis=0)
+
+        # get output-response transfer function for this year
+        Hs_or = asarray([row for row in data.H_or[dataset_rows].values])
+        # get output-response transfer function for this year
+        Hs_ro = asarray([row for row in data.H_ro[dataset_rows].values])
+
+        # calculate signal-response transfer functions
+        Hs_sr = Hs_or / H_or_calib
+
+        # calculate response-signal transfer functions
+        Hs_rs = Hs_ro / H_ro_calib
+
+        coh = Hs_sr * Hs_rs
+
+        newdata = dict(
+            H_sr = [row for row in Hs_sr],
+            H_rs = [row for row in Hs_rs],
+            coherence = [row for row in coh]
+        )
+
+        # add data
+        data = add_data(data, newdata, dataset_rows)
+
+    return data
+
+
 def data_to_file(pkl_file, pkl_data):
     savepath = os.path.join(*glob_pkl_path)
 
