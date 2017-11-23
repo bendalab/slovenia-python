@@ -4,6 +4,7 @@ import matplotlib.mlab as ml
 from numpy import *
 import os
 import pandas as pd
+import pickle
 from pyrelacs.DataClasses import load as pyre_load
 import sys
 
@@ -11,7 +12,7 @@ import sys
 ###
 # globals
 glob_data_path = ['..', '..', 'data', 'distance_attenuation']
-
+glob_pkl_path = ['..', '..', 'pkl', 'distance_attenuation']
 
 ###
 # methods
@@ -64,8 +65,39 @@ def calc_spectra(x, y, sr, params = None):
     return Pxx, Pyy, Pxy, Pyx, f
 
 
+def data_to_file(pkl_file, pkl_data):
+    savepath = os.path.join(*glob_pkl_path)
+
+    if os.path.exists(savepath):
+        print('Saving data to ' + os.path.join(savepath, pkl_file))
+        with open(os.path.join(savepath, pkl_file), 'wb') as fobj:
+            pickle.dump(pkl_data, fobj, protocol=pickle.HIGHEST_PROTOCOL)
+        fobj.close()
+    else:
+        print('Creating directory ' + savepath)
+        os.mkdir(savepath)
+        data_to_file(pkl_file, pkl_data)
+
+    return True
+
+
+def data_from_file(pkl_file):
+    savefile = os.path.join(*(glob_pkl_path + [pkl_file]))
+
+    print('Loading data from ' + savefile)
+    if os.path.exists(savefile):
+        with open(savefile, 'rb') as fobj:
+            data = pickle.load(fobj)
+        fobj.close()
+
+        return data
+    else:
+        print('WARN: No data file found. Returning empty DataFrame')
+        return pd.DataFrame(dict(data_folder = []))
+
+
 def load_info_dat(folderpath):
-    info_file = os.path.join([*folderpath, 'info.dat'])
+    info_file = os.path.join(*(folderpath + ['info.dat']))
     if not os.path.exists(info_file):
         print('ERROR: no info.dat -', info_file)
         exit()
@@ -74,7 +106,7 @@ def load_info_dat(folderpath):
 
 
 def load_traces_dat(folderpath, filename):
-    traces_file = os.path.join([*glob_data_path, *folderpath, filename] )
+    traces_file = os.path.join(*(glob_data_path + folderpath + [filename]))
     if not os.path.exists(traces_file):
         print('ERROR: no *-traces.dat -', traces_file)
         exit()
@@ -126,7 +158,7 @@ def gather_folders(years):
 
         folder_list = []
         for year in years:
-            new_folders = glob(os.path.join(*glob_data_path, year, year+'*'))
+            new_folders = glob(os.path.join(*(glob_data_path + [year] + [year+'*'])))
             folder_list.extend([folder.split(os.sep) for folder in new_folders])
 
         return folder_list
@@ -136,14 +168,25 @@ def sanitize_string(instr):
     outstr = instr.replace('"', '').replace(' ', '')
     return outstr
 
+
 ###
 # run script
 
 if __name__ == '__main__':
 
     if 'load_noise' in sys.argv:
-        folder_list = gather_folders(['2015', '2016'])
 
-    Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(['2016', '2016-07-21-ae-meadow'])
+        data = pd.DataFrame()
 
-    embed()
+        pkl_file = 'noise_data.pkl'
+
+        folder_list = gather_folders(['2015', '2016'])[:3]
+
+        entry_num = len(folder_list)
+        for idx, folder in enumerate(folder_list):
+            print('Entry', idx+1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
+            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+
+            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+
+        data_to_file(pkl_file, data)
