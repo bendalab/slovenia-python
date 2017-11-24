@@ -18,14 +18,17 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Missing arguments. Please specify a pkl file.')
         exit()
+    pkl_file = sys.argv[1]
 
-    noise_data = data_from_file(glob_noise_file)
-
+    # load data
+    noise_data = data_from_file(pkl_file)
+    # average data for distance, condition, year and height
     avg_data = average_duplicates(noise_data)
 
     # create dictionary for axes' handles
     figs = dict()
 
+    #####
     # sort data
     sorted_data = dict()
     for rowidx, rowdata in avg_data.iterrows():
@@ -42,9 +45,9 @@ if __name__ == '__main__':
         sorted_data[catid]['distance'].append(rowdata.distance)
         sorted_data[catid]['H_sr'].append(rowdata.H_sr)
 
-
+    #####
     # calculate average transfer for frequency bins
-    bwidth = 1000
+    bwidth = 500
     freq_bins = arange(5000, 25000, bwidth)
     mfreqs = freq_bins + bwidth / 2
     for catid in sorted_data.keys():
@@ -67,7 +70,9 @@ if __name__ == '__main__':
 
     figs = dict()
 
-    # plot average transfer for binned frequencies
+    #####
+    # 3d
+    # plot surface plot
     for catid in sorted_data.keys():
 
         fig = plt.figure('Binned frequencies ' + str(catid))

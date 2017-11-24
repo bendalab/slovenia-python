@@ -10,6 +10,7 @@ import pandas as pd
 import pickle
 from pyrelacs.DataClasses import load as pyre_load
 from scipy import signal
+from scipy.interpolate import interp1d
 from scipy.io import wavfile
 import sys
 import wave
@@ -43,7 +44,7 @@ glob_pkl_path = ['..', '..', 'pkl', 'distance_attenuation']
 def gauss(dt,steps,sigma): # produce gaus array centered on array middle
     time = arange(-dt*steps,dt*(steps+1),dt)
     mygauss = exp(-time**2/(2*sigma**2))
-    mygauss = mygauss/np.sum(mygauss)
+    mygauss = mygauss/sum(mygauss)
     return mygauss
 
 
@@ -82,7 +83,6 @@ def findpeaks(x,thresh=0.): # find local maxima over certain threshold
 
 
 def make_envelope(x,Fs,reduceOrder=10,reduceNo = 2,flow=7000,fhigh=10000,fullEnvelope=False):
-    dt = 1/Fs
     nyq = 0.5*Fs
     trace = bpfilter_trace(x,nyq,flow,fhigh)
     trace = trace**2
@@ -90,10 +90,10 @@ def make_envelope(x,Fs,reduceOrder=10,reduceNo = 2,flow=7000,fhigh=10000,fullEnv
     trace = sqrt(trace)
     for i in range(reduceNo):
         trace = signal.decimate(trace,reduceOrder,zero_phase=True)
+    time = arange(0, float(len(x))/Fs, 1./ (Fs/(reduceOrder ** 2)))
     if fullEnvelope:
-        time = arange(len(trace))
-        trace = make_env_env(time,trace)
-    return trace
+        trace = make_env_env(arange(len(trace)),trace)
+    return time, trace
 
 #
 ###
@@ -181,6 +181,20 @@ def average_duplicates(data, avg_cols = None):
                     avg_df = avg_df.append(pd.DataFrame(newrow), ignore_index=True)
 
     return avg_df
+
+
+def butter_lowpass(cutoff, fs, order=5):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    [b, a] = signal.butter(order, normal_cutoff, btype='low', analog=False)
+    return b, a
+
+
+def butter_highpass(cutoff, fs, order=5):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    [b, a] = signal.butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
 
 
 def calc_spectra(x, y, sr, nfft = None):
@@ -313,8 +327,22 @@ def data_from_file(pkl_file):
 
         return data
     else:
-        print('WARN: No data file found. Returning empty DataFrame')
-        return pd.DataFrame(dict(data_folder = []))
+        print('ERROR: pkl file not found.')
+        exit()
+
+
+def extract_envelope(x, sr):
+    b, a = butter_highpass(50, sr)
+
+    y1 = signal.filtfilt(b, a, x)
+
+
+    b, a = butter_lowpass(29000, sr)
+
+    y2 = signal.filtfilt(b, a, y1 ** 2)
+
+
+    return y2
 
 
 def load_info_dat(folderpath):
@@ -432,26 +460,35 @@ if __name__ == '__main__':
     # for testing
     if 'test' == sys.argv[1]:
 
-        sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
+        # ignore wav-sampling rate because it is not used for stimulation
+        _, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
 
         metadata, traces = load_traces_dat(['2016', '2016-07-22-ad-open'], 'stimulus-file-traces.dat')
         recordings = asarray([t[1, :] for t in traces])
-        sr_rec = round(1000. / mean(diff(traces[0][0, :])))
-        t_rec = arange(0, recordings.shape[1] / sr_rec, 1. / sr_rec)
+        sr = round(1000. / mean(diff(traces[0][0, :])))
 
+        t_rec = arange(0, recordings.shape[1] / sr, 1. / sr)
+        t_out = arange(0, output.shape[0] / sr, 1. / sr)
 
-        t_out = arange(0, output.shape[0] / sr_rec, 1. / sr_rec)
-
-        embed()
 
         plt.figure()
-        plt.subplot(2, 1, 1)
+        pltnum = len(recordings) + 1
+        plt.subplot(pltnum, 1, 1)
         plt.plot(t_out, output)
+        plt.xlim(0, 3)
 
-        plt.subplot(2, 1, 2)
-        for rec in recordings:
+
+        for idx, rec in enumerate(recordings):
+            rec = rec - mean(rec)
+            plt.subplot(pltnum, 1, idx + 2)
             plt.plot(t_rec, rec)
+
+            y = extract_envelope(rec, sr)
+            plt.plot(t_rec, y)
+            #time, env = make_envelope(rec, sr)
+            #plt.plot(time, env)
+            plt.xlim(0, 3)
 
         plt.show()
 
@@ -487,14 +524,10 @@ if __name__ == '__main__':
             metadata = load_info_dat(folder[-2:])
 
             # get spectra for stimulus condition
-            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:], nfft=nfft)
+            trialmeta = read_call_traces(folder[-2:], nfft=nfft)
 
             # add row to DataFrame
-            newdata = dict(Pxxs=[Pxxs],
-                           Pyys=[Pyys],
-                           Pxys=[Pxys],
-                           Pyxs=[Pyxs],
-                           freqs=[freqs],
+            newdata = dict(
                            trialmeta=[trialmeta],
                            metadata=[metadata])
             data = add_data(data, newdata)
@@ -537,13 +570,22 @@ if __name__ == '__main__':
         for idx, folder in enumerate(folder_list):
             print('Entry', idx + 1, '/', entry_num, ' - Processing ', os.path.join(*folder), '...')
 
+            # recording metadata
+            metadata = load_info_dat(folder[-2:])
+
             # get spectra for stimulus condition
-            Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
 
             # todo: add a downsampled version of signal envelope in time-domain for visualization
 
             # add row to DataFrame
-            data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
+            newdata = dict(Pxxs=[Pxxs],
+                           Pyys=[Pyys],
+                           Pxys=[Pxys],
+                           Pyxs=[Pyxs],
+                           freqs=[freqs],
+                           trialmeta=[trialmeta],
+                           metadata=[metadata])
 
         # save to file
         data_to_file(pkl_file, data)
