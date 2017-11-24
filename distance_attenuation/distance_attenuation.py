@@ -502,7 +502,7 @@ if __name__ == '__main__':
 
         # calculate transfer functions
         data = calc_H_sign_resp(calc_H_out_resp(data))
-        data_to_file(glob_noise_file, data)
+        data_to_file('nfft' + str(nfft) + glob_noise_file, data)
 
 
     ###
