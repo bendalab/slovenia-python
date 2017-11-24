@@ -185,15 +185,15 @@ def average_duplicates(data, avg_cols = None):
     return avg_df
 
 
-def calc_spectra(x, y, sr, params = None):
+def calc_spectra(x, y, sr, nfft = None):
     # expects two 1d arrays as signals and a number for the sampling rate
     # (optional) parameters for FFT
 
     # returns PSD(x,x), PSD(y,y), PSD(x,y), PSD(y,x) and frequency
 
-    if params is None:
+    if nfft is None:
         nfft = 2 ** 11
-        params = {'NFFT': nfft, 'noverlap': nfft / 2}
+    params = {'NFFT': nfft, 'noverlap': nfft / 2}
     if not isinstance(params, dict):
         print('ERROR: params in calc_spectra() is not a dictionary.')
 
