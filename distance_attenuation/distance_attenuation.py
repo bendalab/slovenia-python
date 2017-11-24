@@ -149,6 +149,8 @@ def add_metadata(data):
 
 
 def average_duplicates(data, avg_cols = None):
+    if avg_cols is None:
+        avg_cols = ['H_sr']
 
     keycols = ['year', 'distance', 'condition', 'height']
 
@@ -174,9 +176,12 @@ def average_duplicates(data, avg_cols = None):
                         condition = condition,
                         distance = distance,
                         height = height,
-                        freqs = [data.freqs[filter_cond].values[0]],
-                        H_sr =  [mean(data.H_sr[filter_cond].values, axis=0)]
+                        freqs = [data.freqs[filter_cond].values[0]]
+                        #H_sr =  [mean(data.H_sr[filter_cond].values, axis=0)]
                     )
+
+                    for col in avg_cols:
+                        newrow[col] = [mean(data.[col][filter_cond].values, axis=0)]
 
                     avg_df = avg_df.append(pd.DataFrame(newrow), ignore_index=True)
 
