@@ -96,17 +96,17 @@ def gen_all_cross_corrs(c_s, n, fs, sig, step, m_l):
 
 def gen_plot(lag, all_corrs):
     plt.style.use('ggplot')
-    fix, ax = plt.subplots(len(all_corrs), len(all_corrs), sharex=True)
     for c_1 in range(len(all_corrs)):
         for c_2 in range(c_1, len(all_corrs)):
+            ax = plt.subplot2grid((len(all_corrs), len(all_corrs)), (c_1, c_2))
             c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation']
             bs_c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping']
-            ax[c_1, c_2].plot(lag, c)
-            ax[c_1, c_2].plot(lag, np.median(bs_c, axis=0), 'm')
-            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 2.5, axis=0), 'r')
-            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 97.5, axis=0), 'r')
-            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 25, axis=0), 'g')
-            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 75, axis=0), 'g')
+            ax.plot(lag, c)
+            ax.plot(lag, np.median(bs_c, axis=0), 'm')
+            ax.plot(lag, np.percentile(bs_c, 2.5, axis=0), 'r')
+            ax.plot(lag, np.percentile(bs_c, 97.5, axis=0), 'r')
+            ax.plot(lag, np.percentile(bs_c, 25, axis=0), 'g')
+            ax.plot(lag, np.percentile(bs_c, 75, axis=0), 'g')
     plt.show()
 
 
@@ -126,7 +126,7 @@ gauss_step = 5
 # Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
 # Number of cross correlations for boot strapping:
-n_boot = 1
+n_boot = 100
 
 #times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
 # Calculate cross correlation between times_1 and times_2:
