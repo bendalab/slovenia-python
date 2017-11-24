@@ -1,8 +1,7 @@
-import time
 import shelve
 import numpy as np
 
-from  matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 
 
 def cut_times(t_1, t_2, start, stop):
@@ -48,32 +47,25 @@ def correlate(d1, d2, mode='full'):
     return np.correlate(d1 - d1.mean(), d2 - d2.mean(), mode=mode) / (d1.std() * d2.std()) / d1.shape[0]
 
 
-def correlate_calls(t_1, t_2, fs, sig, step, m_lag, mode='valid'):
+def correlate_calls(t_1, t_2, fs, sig, step, m_l, mode='valid'):
     t_1, t_2 = subtract_min(t_1, t_2)
     log_1, log_2 = gen_logical(t_1, t_2, fs)
     log_1, log_2 = fill_logical(t_1, t_2, log_1, log_2, fs)
     log_1, log_2 = conv_gauss_logical(log_1, log_2, sig, step, fs)
-    c = correlate(log_1, log_2[m_lag * fs:-m_lag * fs], mode=mode)
-    lag = np.arange(-m_lag, m_lag + 1/fs, 1/fs)
+    c = correlate(log_1, log_2[m_l * fs:-m_l * fs], mode=mode)
+    lag = np.arange(-m_l, m_l + 1 / fs, 1 / fs)
     return lag, c, log_1, log_2
 
 
-def bootstrap(t_1, t_2, n, fs, sig, step, m_lag, mode='valid'):
-    corrs = np.zeros((n, m_lag*2*fs + 1), dtype=np.float)
-    print('Bootstrapping...')
+def bootstrap(t_1, t_2, n, fs, sig, step, m_l, mode='valid'):
+    bs_c = np.zeros((n, m_l * 2 * fs + 1), dtype=np.float)
     for i in range(n):
         new_t_1 = gen_new_times(t_1)
         new_t_2 = gen_new_times(t_2)
-        _, c, _, _ = correlate_calls(new_t_1, new_t_2, fs, sig, step, m_lag, mode=mode)
-        corrs[i, :] = c
+        _, c, _, _ = correlate_calls(new_t_1, new_t_2, fs, sig, step, m_l, mode=mode)
+        bs_c[i, :] = c
         print('Progress: {0} %'.format(str(round((i+1)/n*100, 2))))
-    print('Done!')
-    median = np.median(corrs, axis=0)
-    low_2_5 = np.percentile(corrs, 2.5, axis=0)
-    up_97_5 = np.percentile(corrs, 97.5, axis=0)
-    low_25 = np.percentile(corrs, 25, axis=0)
-    up_75 = np.percentile(corrs, 75, axis=0)
-    return median, low_2_5, up_97_5, low_25, up_75
+    return bs_c
 
 
 def gen_new_times(t):
@@ -83,13 +75,46 @@ def gen_new_times(t):
         new_t[i + 1] = new_t[i] + np.random.choice(diffs)
     return new_t
 
+
+def gen_all_cross_corrs(c_s, n, fs, sig, step, m_l):
+    all_corrs = {}
+    for c_1 in range(len(c_s)):
+        t_1 = c_s['{0}. trace'.format(c_1)]
+        all_corrs['{0}. trace'.format(c_1)] = {}
+        for c_2 in range(c_1, len(c_s)):
+            print('Calculating correlation between trace {0} and trace {1}...'.format(c_1, c_2))
+            all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)] = {}
+            t_2 = c_s['{0}. trace'.format(c_2)]
+            lag, c, _, _ = correlate_calls(t_1, t_2, fs, sig, step, m_l)
+            all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation'] = c
+            print('Correlation done!\nBootstrapping trace {0} and trace {1}...'.format(c_1, c_2))
+            corrs = bootstrap(t_1, t_2, n, fs, sig, step, m_l)
+            all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping'] = corrs
+            print('Bootstrapping done!\n\n')
+    return lag, all_corrs
+
+
+def gen_plot(lag, all_corrs):
+    plt.style.use('ggplot')
+    fix, ax = plt.subplots(len(all_corrs), len(all_corrs), sharex=True)
+    for c_1 in range(len(all_corrs)):
+        for c_2 in range(c_1, len(all_corrs)):
+            c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation']
+            bs_c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping']
+            ax[c_1, c_2].plot(lag, c)
+            ax[c_1, c_2].plot(lag, np.median(bs_c, axis=0), 'm')
+            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 2.5, axis=0), 'r')
+            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 97.5, axis=0), 'r')
+            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 25, axis=0), 'g')
+            ax[c_1, c_2].plot(lag, np.percentile(bs_c, 75, axis=0), 'g')
+    plt.show()
+
+
 # times_1 and times_2 should be numpy arrays with shape (x,) that contain call times in seconds:
 with shelve.open(r'.\data') as d:
     call_start = {}
     for key in d.keys():
         call_start[key] = d[key]['CallStart']
-times_1 = call_start['0. trace']
-times_2 = call_start['2. trace']
 
 # Sampling rate for binning call times in Hz:
 Fs = 100
@@ -101,20 +126,24 @@ gauss_step = 5
 # Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
 # Number of cross correlations for boot strapping:
-n_boot = 1000
+n_boot = 1
 
-times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
+#times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
 # Calculate cross correlation between times_1 and times_2:
-corr_lags, corr, logical_1, logical_2 = correlate_calls(times_1, times_2, Fs, sigma, gauss_step, max_lag)
-# Calculate 95% confidence interval for correlation using boot strapping:
-bs_med, bs_low_2_5, bs_up_97_5, bs_low_25, bs_up_75 = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
+#corr_lags, corr, logical_1, logical_2 = correlate_calls(times_1, times_2, Fs, sigma, gauss_step, max_lag)
+# Calculate boot strapping correlations:
+#bs_corrs = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
+corr_lags, all_correlations = gen_all_cross_corrs(call_start, n_boot, Fs, sigma, gauss_step, max_lag)
+gen_plot(corr_lags, all_correlations)
+
+
 
 # Plotting:
+'''
 plt.plot(corr_lags, corr)
-plt.plot(corr_lags, bs_med)
-plt.plot(corr_lags, bs_low_2_5)
-plt.plot(corr_lags, bs_up_97_5)
-plt.plot(corr_lags, bs_low_25)
-plt.plot(corr_lags, bs_up_75)
-print('yay')
-plt.show()
+plt.plot(corr_lags, np.median(bs_corrs, axis=0))
+plt.plot(corr_lags, np.percentile(bs_corrs, 2.5, axis=0))
+plt.plot(corr_lags, np.percentile(bs_corrs, 97.5, axis=0))
+plt.plot(corr_lags, np.percentile(bs_corrs, 25, axis=0))
+plt.plot(corr_lags, np.percentile(bs_corrs, 75, axis=0))
+plt.show()'''
