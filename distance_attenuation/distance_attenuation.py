@@ -30,8 +30,6 @@ if __name__ == '__main__':
 glob_data_path = ['..', '..', 'data', 'distance_attenuation']
 glob_pkl_path = ['..', '..', 'pkl', 'distance_attenuation']
 
-glob_noise_file = 'noise_data.pkl'
-glob_call_file = 'call_data.pkl'
 
 
 ###############
@@ -250,7 +248,7 @@ def calc_H_sign_resp(data):
     print('Calculate signal-response transfer functions and coherence...')
     # conditions for calibration-recordings (smallest distance in an open environment)
     calib_cond = {
-        2015: (data.distance == 50) & (data.condition == 'Cutmeadow'),
+        2015: (data.distance == 50) & (data.condition == 'Cutmeadow') & (data.height == 150),
         2016: (data.distance == 100) & (data.condition == 'Open')
     }
 
@@ -432,7 +430,7 @@ if __name__ == '__main__':
 
     ###
     # for testing
-    if 'test' in sys.argv:
+    if 'test' == sys.argv[1]:
 
         sr_out, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
@@ -457,16 +455,23 @@ if __name__ == '__main__':
 
         plt.show()
 
+
     ###
     # trial with band-limited white noise
-    if 'load_noise' in sys.argv:
+    if 'load_noise' == sys.argv[1]:
+
+        if len(sys.argv) < 3:
+            print('Too few arguments. Please add a pkl-filename.')
+            exit()
+
+        pkl_file = sys.argv[2]
 
         nfft = None
-        if len(sys.argv) > 2:
+        if len(sys.argv) > 3:
             try:
                 nfft = int(sys.argv[-1])
             except:
-                print('WARNING: invalid NFFT parameter in script call.')
+                print('WARNING: invalid NFFT parameter in script call. Needs to be integer.')
 
         # initiate DataFrame
         data = pd.DataFrame()
@@ -495,19 +500,32 @@ if __name__ == '__main__':
             data = add_data(data, newdata)
 
         # save to file
-        data_to_file('nfft' + str(nfft) + glob_noise_file, data)
+        data_to_file(pkl_file, data)
 
         # extract metadata from RELACS output
         data = add_metadata(data)
 
         # calculate transfer functions
         data = calc_H_sign_resp(calc_H_out_resp(data))
-        data_to_file('nfft' + str(nfft) + glob_noise_file, data)
+        data_to_file(pkl_file, data)
 
 
     ###
     # trials with recorded bushcricket calls
-    if 'load_call' in sys.argv:
+    if 'load_call' == sys.argv[1]:
+
+        if len(sys.argv) < 3:
+            print('Too few arguments. Please add a pkl-filename.')
+            exit()
+
+        pkl_file = sys.argv[2]
+
+        nfft = None
+        if len(sys.argv) > 3:
+            try:
+                nfft = int(sys.argv[-1])
+            except:
+                print('WARNING: invalid NFFT parameter in script call. Needs to be integer.')
 
         # initiate DataFrame
         data = pd.DataFrame()
@@ -528,17 +546,27 @@ if __name__ == '__main__':
             data = add_data(data, dict(Pxxs=[Pxxs], Pyys=[Pyys], Pxys=[Pxys], Pyxs=[Pyxs], freqs=[freqs]))
 
         # save to file
-        data_to_file(glob_call_file, data)
+        data_to_file(pkl_file, data)
 
         # extract metadata from RELACS output
         data = add_metadata(data)
 
         # calculate transfer functions
         data = calc_H_sign_resp(calc_H_out_resp(data))
-        data_to_file(glob_call_file, data)
+        data_to_file(pkl_file, data)
 
     #embed()
 
 
+    if 'recalc' == sys.argv[1]:
 
+        # load pkl
+        data_file = sys.argv[-1]
+        data = data_from_file(data_file)
+
+        # update metadata
+        data = add_metadata(data)
+        # calculate transfer functions
+        data = calc_H_sign_resp(calc_H_out_resp(data))
+        data_to_file(data_file, data)
 

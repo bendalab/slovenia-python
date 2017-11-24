@@ -14,60 +14,77 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
+
+    if len(sys.argv) < 2:
+        print('Missing arguments. Please specify a pkl file.')
+        exit()
+
     noise_data = data_from_file(glob_noise_file)
 
     avg_data = average_duplicates(noise_data)
 
     # create dictionary for axes' handles
     figs = dict()
-    if '2d' in sys.argv:  # plot 2d
-        for rowidx, rowdata in avg_data.iterrows():
-            print('Plot row', rowidx, '-', rowdata.distance, 'cm')
 
-            figid = ('2d', rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
-            if figid not in figs.keys():
-                plt.figure(str(figid))
-                figs[figid] = plt.subplot()
+    # sort data
+    sorted_data = dict()
+    for rowidx, rowdata in avg_data.iterrows():
+        catid = (rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
 
-            figs[figid].semilogy(rowdata.freqs, abs(rowdata.H_sr), label=rowdata.distance)
-            figs[figid].set_xlim(5000, 30000)
-            figs[figid].legend()
+        if catid not in sorted_data.keys():
 
-        plt.show()
 
-    if '3d' in sys.argv:
-        # sort data
-        sorted_data = dict()
-        for rowidx, rowdata in avg_data.iterrows():
-            figid = ('3d', rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
+            sorted_data[catid] = dict()
+            sorted_data[catid]['freqs'] = rowdata.freqs
+            sorted_data[catid]['distance'] = []
+            sorted_data[catid]['H_sr'] = []
 
-            if figid not in sorted_data.keys():
-                sorted_data[figid] = dict()
-                sorted_data[figid]['freqs'] = rowdata.freqs
-                sorted_data[figid]['distance'] = []
-                sorted_data[figid]['H_sr'] = []
+        sorted_data[catid]['distance'].append(rowdata.distance)
+        sorted_data[catid]['H_sr'].append(rowdata.H_sr)
 
-            sorted_data[figid]['distance'].append(rowdata.distance)
-            sorted_data[figid]['H_sr'].append(rowdata.H_sr)
 
-        # plot data in surface plot
-        for figid in sorted_data.keys():
-            figdata = sorted_data[figid]
-            freqs = figdata['freqs']
-            distance = asarray(figdata['distance'])
-            H_sr = abs(asarray(figdata['H_sr']))
+    # calculate average transfer for frequency bins
+    bwidth = 1000
+    freq_bins = arange(5000, 25000, bwidth)
+    mfreqs = freq_bins + bwidth / 2
+    for catid in sorted_data.keys():
+        figdata = sorted_data[catid]
+        freqs = figdata['freqs']
+        distance = asarray(figdata['distance'])
+        H_sr = abs(asarray(figdata['H_sr']))
 
-            # plot
-            fig = plt.figure(str(figid))
-            figs[figid] = fig.gca(projection='3d')
+        # calculate average transfer for frequency range
+        mH_sr = empty((distance.shape[0], mfreqs.shape[0]))
+        for fidx, mf in enumerate(mfreqs):
+            for didx, dist in enumerate(distance):
+                mH_sr[didx, fidx] = mean(H_sr[didx, (freqs > (mf - bwidth / 2)) & (freqs < (mf + bwidth / 2))])
 
-            freq_range = (freqs >= 5000) & (freqs <= 25000)
-            X, Y = meshgrid(distance, freqs[freq_range])
-            Z = log10(H_sr.transpose()[freq_range, :])
-            surf = figs[figid].plot_surface(X, Y, Z, cmap='viridis', linewidth=0, antialiased=False)
+        # add to dictionary
+        figdata['mfreqs'] = mfreqs
+        figdata['mH_sr'] = mH_sr
 
-            figs[figid].set_xlabel('Sender-receiver distance [cm]')
-            figs[figid].set_ylabel('Frequency [Hz]')
-            figs[figid].set_zlabel('log10(Gain)')
 
-        plt.show()
+
+    figs = dict()
+
+    # plot average transfer for binned frequencies
+    for catid in sorted_data.keys():
+
+        fig = plt.figure('Binned frequencies ' + str(catid))
+        figs[catid] = fig.gca(projection='3d')
+
+        figdata = sorted_data[catid]
+        distance = asarray(figdata['distance'])
+        mfreqs = figdata['mfreqs']
+        mH_sr = abs(asarray(figdata['mH_sr']))
+
+
+        # plot
+        X, Y = meshgrid(distance, mfreqs)
+        Z = log10(mH_sr.transpose())
+        surf = figs[catid].plot_surface(X, Y, Z, cmap='viridis', linewidth=0, antialiased=False)
+        figs[catid].set_xlabel('Sender-receiver distance [cm]')
+        figs[catid].set_ylabel('Frequency [Hz]')
+        figs[catid].set_zlabel('log10(Gain)')
+
+    plt.show()
