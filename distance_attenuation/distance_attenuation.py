@@ -332,15 +332,13 @@ def data_from_file(pkl_file):
 
 
 def extract_envelope(x, sr):
+    # hpf
     b, a = butter_highpass(50, sr)
-
     y1 = signal.filtfilt(b, a, x)
 
-
-    b, a = butter_lowpass(29000, sr)
-
-    y2 = signal.filtfilt(b, a, y1 ** 2)
-
+    # lpf
+    b, a = butter_lowpass(200, sr)
+    y2 = signal.filtfilt(b, a, abs(y1))
 
     return y2
 
@@ -376,31 +374,27 @@ def read_call_traces(folderpath, nfft = None):
     # get recorded data
     metadata, traces = load_traces_dat(folderpath, 'stimulus-file-traces.dat')
 
-    # get stimulus file contents (recording of a pholidoptera call)
-    sr, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
-    output = data[:, 0]  # use first channel
-
-    Pxxs = []
-    Pyys = []
-    Pxys = []
-    Pyxs = []
     print('Processing trials ...')
-    for t in traces:
+    envelopes = []
+    for trial in traces:
 
         # get recordings
-        sr = round(1000. / mean(diff(t[0, :])))
-        response = t[1, :]
+        sr = round(1000. / mean(diff(trial[0, :])))
+        rec = trial[1, :]
 
-        # get spectra
-        Pxx, Pyy, Pxy, Pyx, f = calc_spectra(output, response, sr, nfft)
+        # get envelope
+        env = extract_envelope(rec, sr)
 
-        Pxxs.append(Pxx)
-        Pyys.append(Pyy)
-        Pxys.append(Pxy)
-        Pyxs.append(Pyx)
-    freqs = f
+        # downsampling
+        reduce_order = 10
+        reduce_num = 2
+        for num in range(reduce_num):
+            env = signal.decimate(env, reduce_order, zero_phase=True)
 
-    return asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
+        envelopes.append(env)
+    t = arange(0, float(len(rec))/sr, 1./ (sr/(reduce_order ** reduce_num)))
+
+    return metadata, t, envelopes
 
 
 def read_noise_traces(folderpath, nfft = None):
@@ -574,30 +568,25 @@ if __name__ == '__main__':
             metadata = load_info_dat(folder[-2:])
 
             # get spectra for stimulus condition
-            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:])
+            trialmeta, t, envelopes = read_call_traces(folder[-2:])
 
-            # todo: add a downsampled version of signal envelope in time-domain for visualization
 
             # add row to DataFrame
-            newdata = dict(Pxxs=[Pxxs],
-                           Pyys=[Pyys],
-                           Pxys=[Pxys],
-                           Pyxs=[Pyxs],
-                           freqs=[freqs],
+            newdata = dict(times=[t],
+                           envelopes=[envelopes],
                            trialmeta=[trialmeta],
                            metadata=[metadata])
+            data = add_data(data, newdata)
+
 
         # save to file
         data_to_file(pkl_file, data)
 
         # extract metadata from RELACS output
         data = add_metadata(data)
-
-        # calculate transfer functions
-        data = calc_H_sign_resp(calc_H_out_resp(data))
         data_to_file(pkl_file, data)
 
-    #embed()
+        embed()
 
 
     if 'recalc' == sys.argv[1]:
