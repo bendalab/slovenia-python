@@ -20,14 +20,14 @@ def subtract_min(t_1, t_2):
 
 def gen_logical(t_1, t_2, fs):
     dur = np.ceil(np.maximum(t_1[-1], t_2[-1]))
-    log_1 = np.zeros(dur.astype(int) * fs)
+    log_1 = np.zeros(dur.astype(int) * fs + 1)
     log_2 = np.copy(log_1)
     return log_1, log_2
 
 
 def fill_logical(t_1, t_2, log_1, log_2, fs):
-    log_1[np.round(t_1 * fs).astype(int) - 1] += 1
-    log_2[np.round(t_2 * fs).astype(int) - 1] += 1
+    log_1[np.round(t_1 * fs).astype(int)] += 1
+    log_2[np.round(t_2 * fs).astype(int)] += 1
     return log_1, log_2
 
 
@@ -60,16 +60,20 @@ def correlate_calls(t_1, t_2, fs, sig, step, m_lag, mode='valid'):
 
 def bootstrap(t_1, t_2, n, fs, sig, step, m_lag, mode='valid'):
     corrs = np.zeros((n, m_lag*2*fs + 1), dtype=np.float)
+    print('Bootstrapping...')
     for i in range(n):
-        t_start = time.time()
         new_t_1 = gen_new_times(t_1)
         new_t_2 = gen_new_times(t_2)
         _, c, _, _ = correlate_calls(new_t_1, new_t_2, fs, sig, step, m_lag, mode=mode)
         corrs[i, :] = c
-        print(str(time.time()-t_start))
-    low = np.percentile(corrs, 2.5, axis=0)
-    up = np.percentile(corrs, 97.5, axis=0)
-    return low, up
+        print('Progress: {0} %'.format(str(round((i+1)/n*100, 2))))
+    print('Done!')
+    median = np.median(corrs, axis=0)
+    low_2_5 = np.percentile(corrs, 2.5, axis=0)
+    up_97_5 = np.percentile(corrs, 97.5, axis=0)
+    low_25 = np.percentile(corrs, 25, axis=0)
+    up_75 = np.percentile(corrs, 75, axis=0)
+    return median, low_2_5, up_97_5, low_25, up_75
 
 
 def gen_new_times(t):
@@ -80,9 +84,12 @@ def gen_new_times(t):
     return new_t
 
 # times_1 and times_2 should be numpy arrays with shape (x,) that contain call times in seconds:
-with shelve.open(r'C:\Users\chris\Documents\calltiming_17_11_21\data') as d:
-    times_1 = d['0. trace']['CallStart']
-    times_2 = d['2. trace']['CallStart']
+with shelve.open(r'.\data') as d:
+    call_start = {}
+    for key in d.keys():
+        call_start[key] = d[key]['CallStart']
+times_1 = call_start['0. trace']
+times_2 = call_start['2. trace']
 
 # Sampling rate for binning call times in Hz:
 Fs = 100
@@ -94,19 +101,19 @@ gauss_step = 5
 # Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
 # Number of cross correlations for boot strapping:
-n_boot = 100
+n_boot = 1000
 
 times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
 # Calculate cross correlation between times_1 and times_2:
 corr_lags, corr, logical_1, logical_2 = correlate_calls(times_1, times_2, Fs, sigma, gauss_step, max_lag)
 # Calculate 95% confidence interval for correlation using boot strapping:
-low_conf, up_conf = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
+bs_med, bs_low_2_5, bs_up_97_5, bs_low_25, bs_up_75 = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
 
 # Plotting:
-fig, ax = plt.subplots(2)
-ax[0].plot(logical_1)
-ax[0].plot(logical_2)
-ax[1].plot(corr_lags, corr)
-ax[1].plot(corr_lags, low_conf)
-ax[1].plot(corr_lags, up_conf)
+plt.plot(corr_lags, corr)
+plt.plot(corr_lags, bs_med)
+plt.plot(corr_lags, bs_low_2_5)
+plt.plot(corr_lags, bs_up_97_5)
+plt.plot(corr_lags, bs_low_25)
+plt.plot(corr_lags, bs_up_75)
 plt.show()
