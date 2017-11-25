@@ -1,3 +1,4 @@
+import sys
 import shelve
 import numpy as np
 
@@ -64,7 +65,8 @@ def bootstrap(t_1, t_2, n, fs, sig, step, m_l, mode='valid'):
         new_t_2 = gen_new_times(t_2)
         _, c, _, _ = correlate_calls(new_t_1, new_t_2, fs, sig, step, m_l, mode=mode)
         bs_c[i, :] = c
-        print('Progress: {0} %'.format(str(round((i+1)/n*100, 2))))
+        sys.stdout.write('\rProgress: {0} %'.format(str(round((i+1)/n*100, 2))))
+        sys.stdout.flush()
     return bs_c
 
 
@@ -90,31 +92,14 @@ def gen_all_cross_corrs(c_s, n, fs, sig, step, m_l):
             print('Correlation done!\nBootstrapping trace {0} and trace {1}...'.format(c_1, c_2))
             corrs = bootstrap(t_1, t_2, n, fs, sig, step, m_l)
             all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping'] = corrs
-            print('Bootstrapping done!\n\n')
+            print('\nBootstrapping done!\n\n')
     return lag, all_corrs
 
-
-def gen_plot(lag, all_corrs):
-    plt.style.use('ggplot')
-    for c_1 in range(len(all_corrs)):
-        for c_2 in range(c_1, len(all_corrs)):
-            ax = plt.subplot2grid((len(all_corrs), len(all_corrs)), (c_1, c_2))
-            c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation']
-            bs_c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping']
-            ax.plot(lag, c)
-            ax.plot(lag, np.median(bs_c, axis=0), 'm')
-            ax.plot(lag, np.percentile(bs_c, 2.5, axis=0), 'r')
-            ax.plot(lag, np.percentile(bs_c, 97.5, axis=0), 'r')
-            ax.plot(lag, np.percentile(bs_c, 25, axis=0), 'g')
-            ax.plot(lag, np.percentile(bs_c, 75, axis=0), 'g')
-    plt.show()
-
-
 # times_1 and times_2 should be numpy arrays with shape (x,) that contain call times in seconds:
-with shelve.open(r'.\data') as d:
+with shelve.open(r'.\data') as shelf_obj:
     call_start = {}
-    for key in d.keys():
-        call_start[key] = d[key]['CallStart']
+    for key in shelf_obj.keys():
+        call_start[key] = shelf_obj[key]['CallStart']
 
 # Sampling rate for binning call times in Hz:
 Fs = 100
@@ -126,7 +111,7 @@ gauss_step = 5
 # Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
 # Number of cross correlations for boot strapping:
-n_boot = 100
+n_boot = 1000
 
 #times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
 # Calculate cross correlation between times_1 and times_2:
@@ -134,16 +119,8 @@ n_boot = 100
 # Calculate boot strapping correlations:
 #bs_corrs = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
 corr_lags, all_correlations = gen_all_cross_corrs(call_start, n_boot, Fs, sigma, gauss_step, max_lag)
-gen_plot(corr_lags, all_correlations)
 
-
-
-# Plotting:
-'''
-plt.plot(corr_lags, corr)
-plt.plot(corr_lags, np.median(bs_corrs, axis=0))
-plt.plot(corr_lags, np.percentile(bs_corrs, 2.5, axis=0))
-plt.plot(corr_lags, np.percentile(bs_corrs, 97.5, axis=0))
-plt.plot(corr_lags, np.percentile(bs_corrs, 25, axis=0))
-plt.plot(corr_lags, np.percentile(bs_corrs, 75, axis=0))
-plt.show()'''
+with shelve.open('test') as shelf_obj:
+    shelf_obj['correlation lags'] = corr_lags
+    for key in all_correlations.keys():
+        shelf_obj[key] = all_correlations[key]
