@@ -2,8 +2,6 @@ import sys
 import shelve
 import numpy as np
 
-from matplotlib import pyplot as plt
-
 
 def cut_times(t_1, t_2, start, stop):
     t_1 = t_1[(start < t_1) & (t_1 < stop)]
