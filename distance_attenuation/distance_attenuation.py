@@ -420,6 +420,7 @@ def read_call_traces(folderpath, plot = True):
         plt.xlabel('Time [s]')
         plt.ylabel('Amplitude')
         plt.savefig(os.path.join(*(glob_fig_path + ['calls_' + folderpath[-1] + '.pdf'])), format='pdf')
+        #plt.show()
         plt.close()
 
 

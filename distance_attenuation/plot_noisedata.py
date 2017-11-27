@@ -8,7 +8,7 @@ import sys
 ###
 # plotting
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
