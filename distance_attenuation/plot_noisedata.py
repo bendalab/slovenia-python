@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # load data
     noise_data = data_from_file(pkl_file)
     # average data for distance, condition, year and height
-    avg_data = average_duplicates(noise_data)
+    avg_data = average_duplicates(noise_data, avg_cols = ['H_sr', 'Pyy'])
 
     # create dictionary for axes' handles
     figs = dict()
@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
     #####
     # calculate average transfer for frequency bins
-    bwidth = 2500
+    bwidth = 2000
     freq_bins = arange(5000, 25000, bwidth)
     mfreqs = freq_bins + bwidth / 2
     for catid in sorted_data.keys():
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     #####
     # 3d
     # plot surface plot
-    if False:
+    if '3d' in sys.argv:
         for catid in sorted_data.keys():
             if not catid[2] == 'year:2015.0':
                 continue
@@ -96,7 +96,7 @@ if __name__ == '__main__':
             figs[catid].set_zlabel('log10(Gain)')
 
     # 2d plot
-    if True:
+    if '2d' in sys.argv:
         for catid in sorted_data.keys():
             if not catid[2] == 'year:2015.0':
                 continue
@@ -110,8 +110,10 @@ if __name__ == '__main__':
             mH_sr = abs(asarray(figdata['mH_sr']))
 
             # plot
-            for freq in mfreqs:
-                figs[catid].loglog(distance, mH_sr[:, mfreqs == freq], label='f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')')
+            cmap = plt.get_cmap('viridis', lut=mfreqs.shape[0])
+            for freq, color in zip(mfreqs, cmap.colors):
+                lbl = 'f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')'
+                figs[catid].loglog(distance, mH_sr[:, mfreqs == freq], color=color, label=lbl)
             figs[catid].loglog(distance, min(distance)/distance, '--k', label='1/distance')
             figs[catid].set_xlabel('Distance [cm]')
             figs[catid].set_xlim(min(distance), max(distance))

@@ -525,11 +525,11 @@ if __name__ == '__main__':
             trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:], nfft=nfft)
 
             # add row to DataFrame
-            newdata = dict(Pxxs = Pxxs,
-                           Pyys = Pyys,
-                           Pxys = Pxys,
-                           Pyxs = Pyxs,
-                           freqs = freqs,
+            newdata = dict(Pxxs = [Pxxs],
+                           Pyys = [Pyys],
+                           Pxys = [Pxys],
+                           Pyxs = [Pyxs],
+                           freqs = [freqs],
                            trialmeta=[trialmeta],
                            metadata=[metadata])
             data = add_data(data, newdata)
