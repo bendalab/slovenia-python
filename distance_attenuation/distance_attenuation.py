@@ -19,17 +19,18 @@ import wave
 ###############
 # plotting
 ###############
-if __name__ == '__main__':
-    import matplotlib
-    matplotlib.use('Qt5Agg')
-    import matplotlib.pyplot as plt
+#if __name__ == '__main__':
+import matplotlib
+matplotlib.use('Qt5Agg')
+import matplotlib.pyplot as plt
 
 
 ###############
 # globals
 ###############
 glob_data_path = ['..', '..', 'data', 'distance_attenuation']
-glob_pkl_path = ['..', '..', 'pkl', 'distance_attenuation']
+glob_pkl_path = ['..', '..', 'pkl']
+glob_fig_path = ['..', '..', 'figures']
 
 
 
@@ -341,7 +342,7 @@ def extract_envelope(x, sr):
     y1 = signal.filtfilt(b, a, x)
 
     # lpf
-    b, a = butter_lowpass(200, sr)
+    b, a = butter_lowpass(100, sr)
     y2 = signal.filtfilt(b, a, abs(y1))
 
     return y2
@@ -373,18 +374,29 @@ def load_traces_dat(folderpath, filename):
     return metadata, traces
 
 
-def read_call_traces(folderpath, nfft = None):
+def read_call_traces(folderpath, plot = True):
 
     # get recorded data
     metadata, traces = load_traces_dat(folderpath, 'stimulus-file-traces.dat')
 
+    if plot:
+        plt.figure(folderpath[-1])
+        plotnum = len(traces)
+
     print('Processing trials ...')
     envelopes = []
-    for trial in traces:
+    sample_points = False
+    for idx, trial in enumerate(traces):
 
         # get recordings
         sr = round(1000. / mean(diff(trial[0, :])))
         rec = trial[1, :]
+
+        # discard if trials have unequal lengths (error while recording)
+        if not sample_points:
+            sample_points = rec.shape[0]
+        if sample_points != rec.shape[0]:
+            return False, False, False
 
         # get envelope
         env = extract_envelope(rec, sr)
@@ -396,7 +408,21 @@ def read_call_traces(folderpath, nfft = None):
             env = signal.decimate(env, reduce_order, zero_phase=True)
 
         envelopes.append(env)
-    t = arange(0, float(len(rec))/sr, 1./ (sr/(reduce_order ** reduce_num)))
+        t = arange(0, float(len(rec)) / sr, 1. / (sr / (reduce_order ** reduce_num)))
+
+        if plot:
+            plt.subplot(plotnum, 1, idx + 1)
+            plt.plot(trial[0, :]/1000, rec - mean(rec), label='Raw')
+            plt.plot(t, env, label='Envelope')
+
+    if plot:
+        plt.legend()
+        plt.xlabel('Time [s]')
+        plt.ylabel('Amplitude')
+        plt.savefig(os.path.join(*(glob_fig_path + ['calls_' + folderpath[-1] + '.pdf'])), format='pdf')
+        plt.close()
+
+
 
     return metadata, t, envelopes
 
@@ -458,13 +484,22 @@ if __name__ == '__main__':
     # for testing
     if 'test' == sys.argv[1]:
 
+
+
         # ignore wav-sampling rate because it is not used for stimulation
         _, data = wavfile.read(os.path.join(*(glob_data_path + ['Pholidoptera_littoralis-HP1kHz-T25C.wav'])))
         output = data[:, 0]  # use first channel
 
-        metadata, traces = load_traces_dat(['2016', '2016-07-22-ad-open'], 'stimulus-file-traces.dat')
+        folder = ['2016', '2016-07-22-aa-open']
+
+        metadata, traces = load_traces_dat(folder, 'stimulus-file-traces.dat')
         recordings = asarray([t[1, :] for t in traces])
         sr = round(1000. / mean(diff(traces[0][0, :])))
+
+        trialmeta, t, envelopes = read_call_traces(folder)
+        if trialmeta is False:
+            print('ERROR')
+            exit()
 
         t_rec = arange(0, recordings.shape[1] / sr, 1. / sr)
         t_out = arange(0, output.shape[0] / sr, 1. / sr)
@@ -477,15 +512,12 @@ if __name__ == '__main__':
         plt.xlim(0, 3)
 
 
-        for idx, rec in enumerate(recordings):
+        for idx, (rec, env) in enumerate(zip(recordings, envelopes)):
             rec = rec - mean(rec)
             plt.subplot(pltnum, 1, idx + 2)
             plt.plot(t_rec, rec)
 
-            y = extract_envelope(rec, sr)
-            plt.plot(t_rec, y)
-            #time, env = make_envelope(rec, sr)
-            #plt.plot(time, env)
+            plt.plot(t, env)
             plt.xlim(0, 3)
 
         plt.show()
@@ -555,13 +587,6 @@ if __name__ == '__main__':
 
         pkl_file = sys.argv[2]
 
-        nfft = None
-        if len(sys.argv) > 3:
-            try:
-                nfft = int(sys.argv[-1])
-            except:
-                print('WARNING: invalid NFFT parameter in script call. Needs to be integer.')
-
         # initiate DataFrame
         data = pd.DataFrame()
 
@@ -577,6 +602,9 @@ if __name__ == '__main__':
 
             # get spectra for stimulus condition
             trialmeta, t, envelopes = read_call_traces(folder[-2:])
+            if trialmeta is False:
+                print('Skipping dataset because some trials may be corrupted.')
+                continue
 
 
             # add row to DataFrame
