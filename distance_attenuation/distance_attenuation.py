@@ -522,10 +522,14 @@ if __name__ == '__main__':
             metadata = load_info_dat(folder[-2:])
 
             # get spectra for stimulus condition
-            trialmeta = read_call_traces(folder[-2:], nfft=nfft)
+            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:], nfft=nfft)
 
             # add row to DataFrame
-            newdata = dict(
+            newdata = dict(Pxxs = Pxxs,
+                           Pyys = Pyys,
+                           Pxys = Pxys,
+                           Pyxs = Pyxs,
+                           freqs = freqs,
                            trialmeta=[trialmeta],
                            metadata=[metadata])
             data = add_data(data, newdata)
