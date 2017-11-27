@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
     #####
     # calculate average transfer for frequency bins
-    bwidth = 500
+    bwidth = 2500
     freq_bins = arange(5000, 25000, bwidth)
     mfreqs = freq_bins + bwidth / 2
     for catid in sorted_data.keys():
@@ -73,23 +73,51 @@ if __name__ == '__main__':
     #####
     # 3d
     # plot surface plot
-    for catid in sorted_data.keys():
+    if False:
+        for catid in sorted_data.keys():
+            if not catid[2] == 'year:2015.0':
+                continue
 
-        fig = plt.figure('Binned frequencies ' + str(catid))
-        figs[catid] = fig.gca(projection='3d')
+            fig = plt.figure('3d ' + str(catid))
+            figs[catid] = fig.gca(projection='3d')
 
-        figdata = sorted_data[catid]
-        distance = asarray(figdata['distance'])
-        mfreqs = figdata['mfreqs']
-        mH_sr = abs(asarray(figdata['mH_sr']))
+            figdata = sorted_data[catid]
+            distance = asarray(figdata['distance'])
+            mfreqs = figdata['mfreqs']
+            mH_sr = abs(asarray(figdata['mH_sr']))
 
 
-        # plot
-        X, Y = meshgrid(distance, mfreqs)
-        Z = log10(mH_sr.transpose())
-        surf = figs[catid].plot_surface(X, Y, Z, cmap='viridis', linewidth=0, antialiased=False)
-        figs[catid].set_xlabel('Sender-receiver distance [cm]')
-        figs[catid].set_ylabel('Frequency [Hz]')
-        figs[catid].set_zlabel('log10(Gain)')
+            # plot
+            X, Y = meshgrid(distance, mfreqs)
+            Z = log10(mH_sr.transpose())
+            surf = figs[catid].plot_surface(X, Y, Z, cmap='viridis', linewidth=0, antialiased=False)
+            figs[catid].set_xlabel('Sender-receiver distance [cm]')
+            figs[catid].set_ylabel('Frequency [Hz]')
+            figs[catid].set_zlabel('log10(Gain)')
+
+    # 2d plot
+    if True:
+        for catid in sorted_data.keys():
+            if not catid[2] == 'year:2015.0':
+                continue
+
+            fig = plt.figure('2d ' + str(catid))
+            figs[catid] = fig.gca()
+
+            figdata = sorted_data[catid]
+            distance = asarray(figdata['distance'])
+            mfreqs = figdata['mfreqs']
+            mH_sr = abs(asarray(figdata['mH_sr']))
+
+            # plot
+            for freq in mfreqs:
+                figs[catid].loglog(distance, mH_sr[:, mfreqs == freq], label='f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')')
+            figs[catid].loglog(distance, min(distance)/distance, '--k', label='1/distance')
+            figs[catid].set_xlabel('Distance [cm]')
+            figs[catid].set_xlim(min(distance), max(distance))
+            figs[catid].set_ylabel('Gain [V/V]')
+            figs[catid].set_ylim(floor(min(mH_sr.flatten())), ceil(max(mH_sr.flatten())))
+
+            figs[catid].legend()
 
     plt.show()
