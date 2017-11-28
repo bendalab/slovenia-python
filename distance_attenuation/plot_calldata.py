@@ -8,7 +8,7 @@ import sys
 ###
 # plotting
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # load data
     data = data_from_file(pkl_file)
     # average data for distance, condition, year and height
-    avg_data = average_duplicates(data, 'envelopes')
+    avg_data = average_duplicates(data, ['envelopes'])
 
 
     #####
@@ -34,3 +34,10 @@ if __name__ == '__main__':
 
         if catid not in sorted_data.keys():
             sorted_data[catid] = dict()
+            sorted_data[catid]['distance'] = []
+            sorted_data[catid]['envelopes'] = []
+
+        sorted_data[catid]['distance'].append(rowdata.distance)
+        sorted_data[catid]['envelopes'].append(rowdata.envelopes)
+
+    embed()

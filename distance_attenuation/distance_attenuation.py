@@ -19,10 +19,10 @@ import wave
 ###############
 # plotting
 ###############
-#if __name__ == '__main__':
-import matplotlib
-matplotlib.use('Qt5Agg')
-import matplotlib.pyplot as plt
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
 
 
 ###############
@@ -38,67 +38,6 @@ glob_fig_path = ['..', '..', 'figures']
 # methods
 ###############
 
-#####
-###
-# bushcricket-call processing by Martin Zeller
-
-def gauss(dt,steps,sigma): # produce gaus array centered on array middle
-    time = arange(-dt*steps,dt*(steps+1),dt)
-    mygauss = exp(-time**2/(2*sigma**2))
-    mygauss = mygauss/sum(mygauss)
-    return mygauss
-
-
-def bpfilter_trace(trace,nyq,fLow=7000,fHigh=10000,butterOrder=3): # butterworth bp filter on trace
-    low = fLow/nyq
-    high = fHigh/nyq
-    [b, a] = signal.butter(butterOrder, [low,high],btype='bandpass')
-    filtered = signal.filtfilt(b,a,trace)
-    return filtered
-
-
-def make_env_env(time,env):
-    peaks = findpeaks(env,0.0)
-    xsource = time[peaks]
-    ysource = env[peaks]
-    xsource = append(0,xsource)
-    ysource = append(0,ysource)
-    xsource = append(xsource,max(time))
-    ysource = append(ysource,0)
-    newy = interp(time,xsource,ysource)
-    return newy
-
-
-#@jit(int32[:](float64[:],float64))  # not working in 3.4
-def findpeaks(x,thresh=0.): # find local maxima over certain threshold
-    peaks = np.zeros(len(x),dtype=int32)
-    ind = range(1,len(x)-1)
-    c = 0
-    for i in ind:
-        diffFwd = x[i+1]-x[i]
-        diffBwd = x[i]-x[i-1]
-        if diffFwd < 0 and diffBwd > 0 and x[i] > thresh:
-            peaks[c] = i
-            c += 1
-    return peaks[:c]
-
-
-def make_envelope(x,Fs,reduceOrder=10,reduceNo = 2,flow=7000,fhigh=10000,fullEnvelope=False):
-    nyq = 0.5*Fs
-    trace = bpfilter_trace(x,nyq,flow,fhigh)
-    trace = trace**2
-    trace = signal.fftconvolve(trace,gauss(1/Fs,3000,0.005),mode='same')
-    trace = sqrt(trace)
-    for i in range(reduceNo):
-        trace = signal.decimate(trace,reduceOrder,zero_phase=True)
-    time = arange(0, float(len(x))/Fs, 1./ (Fs/(reduceOrder ** 2)))
-    if fullEnvelope:
-        trace = make_env_env(arange(len(trace)),trace)
-    return time, trace
-
-#
-###
-#####
 
 def add_data(data, rowdata, rowidx = None):
     # expects two arguments
@@ -151,7 +90,7 @@ def add_metadata(data):
 
 def average_duplicates(data, avg_cols = None):
     if avg_cols is None:
-        avg_cols = ['H_sr']
+        avg_cols = ['freqs', 'H_sr']
 
     keycols = ['year', 'distance', 'condition', 'height']
 
@@ -176,8 +115,7 @@ def average_duplicates(data, avg_cols = None):
                         year = year,
                         condition = condition,
                         distance = distance,
-                        height = height,
-                        freqs = [data.freqs[filter_cond].values[0]]
+                        height = height
                     )
 
                     for col in avg_cols:
@@ -241,12 +179,12 @@ def calc_H_out_resp(data):
         newdata['Pyy_sd'] = std(rowdata['Pyys'], axis=0)
 
         # mean CSD(output, response)
-        newdata['Pxy'] = mean(rowdata['Pxys'], axis=0)
-        newdata['Pxy_sd'] = std(rowdata['Pxys'], axis=0)
+        newdata['Pxy'] = mean(abs(rowdata['Pxys']), axis=0)
+        newdata['Pxy_sd'] = std(abs(rowdata['Pxys']), axis=0)
 
         # mean CSD(response, output)
-        newdata['Pyx'] = mean(rowdata['Pyxs'], axis=0)
-        newdata['Pyx_sd'] = std(rowdata['Pyxs'], axis=0)
+        newdata['Pyx'] = mean(abs(rowdata['Pyxs']), axis=0)
+        newdata['Pyx_sd'] = std(abs(rowdata['Pyxs']), axis=0)
 
         # output-response transfer
         newdata['H_or'] = newdata['Pxy'] / newdata['Pxx']
@@ -285,10 +223,10 @@ def calc_H_sign_resp(data):
         # get output-response transfer function for this year
         Hs_ro = asarray([row for row in data.H_ro[dataset_rows].values])
 
-        # calculate signal-response transfer functions
+        # calculate signal-response transfer functions (forward transfer)
         Hs_sr = Hs_or / H_or_calib
 
-        # calculate response-signal transfer functions
+        # calculate response-signal transfer functions (backward transfer)
         Hs_rs = Hs_ro / H_ro_calib
 
         coh = Hs_sr * Hs_rs
@@ -425,7 +363,7 @@ def read_call_traces(folderpath, plot = True):
 
 
 
-    return metadata, t, envelopes
+    return metadata, t, asarray(envelopes)
 
 
 def read_noise_traces(folderpath, nfft = None):
