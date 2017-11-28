@@ -10,15 +10,17 @@ def gen_plot(lag, all_corrs):
             c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation']
             bs_c = all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['bootstrapping']
             ax.plot(lag, c)
-            ax.plot(lag, np.median(bs_c, axis=0), 'm')
-            ax.plot(lag, np.percentile(bs_c, 2.5, axis=0), 'r')
-            ax.plot(lag, np.percentile(bs_c, 97.5, axis=0), 'r')
+            ax.plot(lag, np.median(bs_c, axis=0), 'b')
+            ax.plot(lag, np.percentile(bs_c, 2.5, axis=0), 'y')
+            ax.plot(lag, np.percentile(bs_c, 97.5, axis=0), 'y')
             ax.plot(lag, np.percentile(bs_c, 25, axis=0), 'g')
             ax.plot(lag, np.percentile(bs_c, 75, axis=0), 'g')
+            ax.set_title('{0}. trace & {1}.trace'.format(c_1, c_2))
+            #ax.set_ylim([-.5, 1])
     plt.show()
 
 
-with shelve.open('all_correlations') as shelf_obj:
+with shelve.open(r'..\bootstrapping\all_correlations') as shelf_obj:
     corr_lags = shelf_obj['correlation lags']
     all_correlations = {}
     for correlation in range(len(shelf_obj) - 1):

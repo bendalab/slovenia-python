@@ -1,6 +1,7 @@
 import sys
 import shelve
 import numpy as np
+from matplotlib import pyplot as plt
 
 
 def cut_times(t_1, t_2, start, stop):
@@ -79,12 +80,12 @@ def gen_new_times(t):
 def gen_all_cross_corrs(c_s, n, fs, sig, step, m_l):
     all_corrs = {}
     for c_1 in range(len(c_s)):
-        t_1 = c_s['{0}. trace'.format(c_1)]
+        t_1 = np.copy(c_s['{0}. trace'.format(c_1)])
         all_corrs['{0}. trace'.format(c_1)] = {}
         for c_2 in range(c_1, len(c_s)):
             print('Calculating correlation between trace {0} and trace {1}...'.format(c_1, c_2))
             all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)] = {}
-            t_2 = c_s['{0}. trace'.format(c_2)]
+            t_2 = np.copy(c_s['{0}. trace'.format(c_2)])
             lag, c, _, _ = correlate_calls(t_1, t_2, fs, sig, step, m_l)
             all_corrs['{0}. trace'.format(c_1)]['{0}. trace'.format(c_2)]['correlation'] = c
             print('Correlation done!\nBootstrapping trace {0} and trace {1}...'.format(c_1, c_2))
@@ -109,16 +110,23 @@ gauss_step = 5
 # Maximum lag for cross correlation in both directions in seconds:
 max_lag = 10  # seconds
 # Number of cross correlations for boot strapping:
-n_boot = 1000
+n_boot = 1
 
 #times_1, times_2 = cut_times(times_1, times_2, 0, 9999)
 # Calculate cross correlation between times_1 and times_2:
-#corr_lags, corr, logical_1, logical_2 = correlate_calls(times_1, times_2, Fs, sigma, gauss_step, max_lag)
+print(call_start['1. trace'])
+print(call_start['5. trace'])
+corr_lags, corr, logical_1, logical_2 = correlate_calls(call_start['1. trace'], call_start['5. trace'], Fs, sigma, gauss_step, max_lag)
 # Calculate boot strapping correlations:
 #bs_corrs = bootstrap(times_1, times_2, n_boot, Fs, sigma, gauss_step, max_lag)
-corr_lags, all_correlations = gen_all_cross_corrs(call_start, n_boot, Fs, sigma, gauss_step, max_lag)
+corr_lags1, all_correlations = gen_all_cross_corrs(call_start, n_boot, Fs, sigma, gauss_step, max_lag)
 
 with shelve.open('test') as shelf_obj:
     shelf_obj['correlation lags'] = corr_lags
     for key in all_correlations.keys():
         shelf_obj[key] = all_correlations[key]
+
+fig, ax = plt.subplots(2)
+ax[0].plot(corr_lags, corr)
+ax[1].plot(corr_lags1, all_correlations['1. trace']['5. trace']['correlation'])
+plt.show()
