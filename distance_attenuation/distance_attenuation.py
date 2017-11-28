@@ -3,7 +3,6 @@
 from glob import glob
 from IPython import embed
 import matplotlib.mlab as ml
-#from numba import jit, int32, float64
 from numpy import *
 import os
 import pandas as pd
@@ -12,7 +11,6 @@ from pyrelacs.DataClasses import load as pyre_load
 from scipy import signal
 from scipy.io import wavfile
 import sys
-import wave
 
 
 ###############
@@ -394,9 +392,6 @@ def read_noise_traces(folderpath, nfft = None):
 def gather_folders(years):
         # function gathers all folders in a given subdirectory on the global data path
 
-        if not os.path.exists(os.path.join(*glob_data_path)):
-            print('Data directory does not exist.')
-            exit()
 
         folder_list = []
         for year in years:
