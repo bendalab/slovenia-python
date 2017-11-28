@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import synch_funcs
 
 fs = 100
-sigma = .4
+sigma = .25
 gauss_step = 5
 max_lag = 10
 n = 1000
