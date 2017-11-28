@@ -10,7 +10,6 @@ import pandas as pd
 import pickle
 from pyrelacs.DataClasses import load as pyre_load
 from scipy import signal
-from scipy.interpolate import interp1d
 from scipy.io import wavfile
 import sys
 import wave
@@ -120,7 +119,6 @@ def average_duplicates(data, avg_cols = None):
 
                     for col in avg_cols:
                         newrow[col] = [mean(data[col][filter_cond].values, axis=0)]
-
                     avg_df = avg_df.append(pd.DataFrame(newrow), ignore_index=True)
 
     return avg_df
@@ -188,6 +186,9 @@ def calc_H_out_resp(data):
 
         # response-output transfer
         newdata['H_ro'] = newdata['Pyx'] / newdata['Pyy']
+
+        # mean mlab output-response coherence
+        newdata['ml_coh'] = mean(rowdata['ml_coherence'], axis=0)
 
         # add data
         data = add_data(data, newdata, rowidx)

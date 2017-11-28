@@ -22,9 +22,9 @@ if __name__ == '__main__':
 
     # load data
     noise_data = data_from_file(pkl_file)
-    embed()
+
     # average data for distance, condition, year and height
-    avg_data = average_duplicates(noise_data, avg_cols = ['freqs', 'H_sr', 'coherence', 'ml_coherence'])
+    avg_data = average_duplicates(noise_data, avg_cols = ['freqs', 'H_sr', 'coherence', 'ml_coh'])
 
     # create dictionary for axes' handles
     figs = dict()
@@ -43,8 +43,8 @@ if __name__ == '__main__':
             sorted_data[catid]['coh'] = []
 
         sorted_data[catid]['distance'].append(rowdata.distance)
-        sorted_data[catid]['H_sr'].append(rowdata.H_sr)
-        sorted_data[catid]['coh'].append(rowdata.ml_coherence)
+        sorted_data[catid]['H_sr'].append(abs(rowdata.H_sr))
+        sorted_data[catid]['coh'].append(abs(rowdata.ml_coh))
 
     #####
     # calculate average transfer for frequency bins
