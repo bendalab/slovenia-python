@@ -70,8 +70,6 @@ if __name__ == '__main__':
         figdata['mH_sr'] = mH_sr
         figdata['mCoh'] = mCoh
 
-
-
     figs = dict()
 
     #####
@@ -91,7 +89,7 @@ if __name__ == '__main__':
             mH_sr = abs(asarray(figdata['mH_sr']))
             mCoh = abs(asarray(figdata['mCoh']))
 
-            dist_cond = distance <= 1500
+            dist_cond = distance > 0
             # plot
             X, Y = meshgrid(distance[dist_cond], mfreqs)
 
@@ -104,7 +102,7 @@ if __name__ == '__main__':
             figs[catid][0].set_zlim(-4, 1)
 
             # signal-response coherence
-            Z_C = log10(mCoh[dist_cond, :].transpose())
+            Z_C = mCoh[dist_cond, :].transpose()
             surf = figs[catid][1].plot_surface(X, Y, Z_C, cmap='viridis', linewidth=0, antialiased=False)
             figs[catid][1].set_xlabel('Sender-receiver distance [cm]')
             figs[catid][1].set_ylabel('Frequency [Hz]')
@@ -142,7 +140,7 @@ if __name__ == '__main__':
             figs[catid][1].set_xlim(min(distance), max(distance))
             figs[catid][0].set_ylabel('Gain [V/V]')
             figs[catid][1].set_ylabel('Coherence')
-            figs[catid][0].set_ylim(floor(min(mH_sr.flatten())), ceil(max(mH_sr.flatten())))
+            figs[catid][0].set_ylim(0.001, 10)
 
             figs[catid][0].legend()
             figs[catid][1].legend()

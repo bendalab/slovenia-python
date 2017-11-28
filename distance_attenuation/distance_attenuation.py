@@ -158,9 +158,10 @@ def calc_spectra(x, y, sr, nfft = None):
     Pxx, _ = ml.psd(x, Fs=sr, **params)
     Pyy, _ = ml.psd(y, Fs=sr, **params)
     Pxy, _ = ml.csd(x, y, Fs=sr, **params)
-    Pyx, f = ml.csd(y, x, Fs=sr, **params)
+    Pyx, _ = ml.csd(y, x, Fs=sr, **params)
+    ml_coherence, f = ml.cohere(x, y, Fs=sr, **params)
 
-    return Pxx, Pyy, Pxy, Pyx, f
+    return Pxx, Pyy, Pxy, Pyx, ml_coherence, f
 
 
 def calc_H_out_resp(data):
@@ -172,27 +173,21 @@ def calc_H_out_resp(data):
 
         # mean PSD(output)
         newdata['Pxx'] = mean(rowdata['Pxxs'], axis=0)
-        newdata['Pxx_sd'] = std(rowdata['Pxxs'], axis=0)
 
         # mean PSD(response)
         newdata['Pyy'] = mean(rowdata['Pyys'], axis=0)
-        newdata['Pyy_sd'] = std(rowdata['Pyys'], axis=0)
 
         # mean CSD(output, response)
         newdata['Pxy'] = mean(abs(rowdata['Pxys']), axis=0)
-        newdata['Pxy_sd'] = std(abs(rowdata['Pxys']), axis=0)
 
         # mean CSD(response, output)
         newdata['Pyx'] = mean(abs(rowdata['Pyxs']), axis=0)
-        newdata['Pyx_sd'] = std(abs(rowdata['Pyxs']), axis=0)
 
         # output-response transfer
         newdata['H_or'] = newdata['Pxy'] / newdata['Pxx']
-        newdata['H_or_sd'] = newdata['Pxy_sd'] / newdata['Pxx_sd']
 
         # response-output transfer
         newdata['H_ro'] = newdata['Pyx'] / newdata['Pyy']
-        newdata['H_ro_sd'] = newdata['Pyx_sd'] / newdata['Pyy_sd']
 
         # add data
         data = add_data(data, newdata, rowidx)
@@ -373,6 +368,7 @@ def read_noise_traces(folderpath, nfft = None):
     Pyys = []
     Pxys = []
     Pyxs = []
+    ml_coherences = []
     print('Processing trials ...')
     for t in traces:
 
@@ -382,15 +378,16 @@ def read_noise_traces(folderpath, nfft = None):
         response = t[2, :]
 
         # get spectra
-        Pxx, Pyy, Pxy, Pyx, f = calc_spectra(output, response, sr, nfft)
+        Pxx, Pyy, Pxy, Pyx, ml_coherence, f = calc_spectra(output, response, sr, nfft)
 
         Pxxs.append(Pxx)
         Pyys.append(Pyy)
         Pxys.append(Pxy)
         Pyxs.append(Pyx)
+        ml_coherences.append(ml_coherence)
     freqs = f
 
-    return metadata, asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), freqs
+    return metadata, asarray(Pxxs), asarray(Pyys), asarray(Pxys), asarray(Pyxs), asarray(ml_coherences), freqs
 
 
 def gather_folders(years):
@@ -493,13 +490,14 @@ if __name__ == '__main__':
             metadata = load_info_dat(folder[-2:])
 
             # get spectra for stimulus condition
-            trialmeta, Pxxs, Pyys, Pxys, Pyxs, freqs = read_noise_traces(folder[-2:], nfft=nfft)
+            trialmeta, Pxxs, Pyys, Pxys, Pyxs, ml_coherence, freqs = read_noise_traces(folder[-2:], nfft=nfft)
 
             # add row to DataFrame
             newdata = dict(Pxxs = [Pxxs],
                            Pyys = [Pyys],
                            Pxys = [Pxys],
                            Pyxs = [Pyxs],
+                           ml_coherence = [ml_coherence],
                            freqs = [freqs],
                            trialmeta=[trialmeta],
                            metadata=[metadata])
@@ -560,8 +558,6 @@ if __name__ == '__main__':
         # extract metadata from RELACS output
         data = add_metadata(data)
         data_to_file(pkl_file, data)
-
-        embed()
 
 
     if 'recalc' == sys.argv[1]:
