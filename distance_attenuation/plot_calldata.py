@@ -42,7 +42,9 @@ if __name__ == '__main__':
         sorted_data[catid]['distance'].append(rowdata.distance)
         sorted_data[catid]['envelopes'].append(rowdata.envelopes)
         sorted_data[catid]['times'].append(rowdata.times)
-        sorted_data[catid]['gains'].append(std(rowdata.envelopes))
+        envelopes = []
+        envelopes.extend([env[(rowdata.times > 0.5) & (rowdata.times < 1.5)] for env in rowdata.envelopes])
+        sorted_data[catid]['gains'].append(std(envelopes) / mean(envelopes))
 
 
 
@@ -95,7 +97,7 @@ if __name__ == '__main__':
         figs['gains'].legend()
         figs['gains'].set_xlabel('Distance [cm]')
         figs['gains'].set_xlim(100, 2000)
-        figs['gains'].set_ylabel('Gain')
+        figs['gains'].set_ylabel('SD(Env) / mean(Env)')
 
 
 
