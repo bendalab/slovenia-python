@@ -136,7 +136,14 @@ set_plot_stuff_corr(axes_6)
 fig_7 = make_figure('one_time_step')
 for idx in range(5):
     plt.plot(lags, bs_correlations[idx, :], corr_color)
-plt.plot([2, 2], [-1, 1], 'k')
+#plt.plot([2, 2], [-1, 1], 'k')
+plt.arrow(2, -.8, 0, -.2,
+          width=.2,
+          head_width=.6,
+          head_length=.06,
+          fc='k',
+          ec='k',
+          length_includes_head=True)
 axes_7 = plt.gca()
 axes_7.set_title('Cross-Correlation of Resampled Cricket Songs')
 set_plot_stuff_corr(axes_7)
@@ -160,7 +167,6 @@ set_plot_stuff_hist(axes_9)
 
 fig_10 = make_figure('first_corr_with_one')
 plt.plot(lags, orig_correlation, corr_color)
-plt.plot([2, 2], [-1, 1], 'k')
 plt.plot(2, lower,
          marker='o',
          markerfacecolor=conf_color,

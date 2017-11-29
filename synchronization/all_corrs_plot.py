@@ -12,6 +12,8 @@ with shelve.open('myShelf') as data:
 lags = all_correlations['lags']
 
 plt.rcParams['font.size'] = 12
+corr_color = '#d62728'
+conf_color = '#2ca02c'
 
 fig_width = 25.4
 fig_height = 19.05
@@ -23,14 +25,14 @@ for i_1 in range(6):
         bootstrapping = all_correlations['{0}. trace'.format(i_1)]['{0}. trace'.format(i_2)]['bootstrapping']
 
         ax = plt.subplot2grid((6, 6), (i_1, i_2), fig=fig)
-        ax.plot(lags, correlation, 'b')
-        ax.plot(lags, np.percentile(bootstrapping, 2.5, axis=0), 'r')
-        ax.plot(lags, np.percentile(bootstrapping, 97.5, axis=0), 'r')
+        ax.plot(lags, correlation, corr_color)
+        ax.plot(lags, np.percentile(bootstrapping, 2.5, axis=0), conf_color)
+        ax.plot(lags, np.percentile(bootstrapping, 97.5, axis=0), conf_color)
 
         ax.set_xlim(-10, 10)
         ax.set_ylim(-.5, 1.1)
         if i_1 == 0 and i_2 == 0:
-            ax.set_xticks([-10, -5, 0, 5, 10])
+            ax.set_xticks([-10, 0, 10])
             ax.set_yticks([-.5, 0, .5, 1])
             ax.set_xlabel(r'$\Delta$t [s]')
             ax.set_ylabel('Pearson')
