@@ -11,6 +11,7 @@ from pyrelacs.DataClasses import load as pyre_load
 from scipy import signal
 from scipy.io import wavfile
 import sys
+import time
 
 
 ###############
@@ -18,7 +19,8 @@ import sys
 ###############
 if __name__ == '__main__':
     import matplotlib
-    matplotlib.use('Agg')
+    from mpl_toolkits.mplot3d import Axes3D
+    #matplotlib.use('GTK')
     import matplotlib.pyplot as plt
 
 
@@ -43,23 +45,23 @@ def add_data(data, rowdata, rowidx = None):
     #           if rowidx is provided, the number of rows addressed
     #           must match the number of list-elements in rowdata[key]
 
-    if not isinstance(data, pd.DataFrame):
-        print('ERROR: data in add_data() is not a DataFrame.')
+    if not isinstance(data, dict):
+        print('ERROR: data in add_data() is not a dictionary.')
         exit()
     if not isinstance(rowdata, dict):
         print('ERROR: rowdata in add_data() is not a dictionary.')
         exit()
 
-    if not rowidx is None:
-        for colkey in rowdata.keys():
-            if colkey not in data.columns:
-                data[colkey] = None
+    for colkey in rowdata.keys():
+        if rowidx is not None:
+            if colkey not in data.keys():
+                data[colkey] = [None] * data['_count']
+            data[colkey][rowidx] = rowdata[colkey]
+        else:
+            if colkey not in data.keys():
+                data[colkey] = []
+            data[colkey].append(rowdata[colkey])
 
-            #data.loc[rowidx, colkey] = rowdata[colkey]
-            data.set_value(rowidx, colkey, [rowdata[colkey]])
-
-    else:
-        data = data.append(pd.DataFrame(rowdata), ignore_index=True)
 
     return data
 
@@ -136,10 +138,16 @@ if len(sys.argv) == 1:
 pkl_file = 'noise.pkl'
 
 
+#################
+# MANUAL
+#################
 if 'manual' in sys.argv:
     embed()
 
 
+#################
+# LOAD DATA
+#################
 if 'load' in sys.argv:
 
     # data folder to load
@@ -151,7 +159,7 @@ if 'load' in sys.argv:
         folder_list.extend([folder.split(os.sep) for folder in new_folders])
 
 
-    data = pd.DataFrame()
+    data = dict()
 
     entry_num = len(folder_list)
     for idx, folderpath in enumerate(folder_list):
@@ -232,12 +240,12 @@ if 'load' in sys.argv:
         # add new row
         newrow = dict(
             # calculated from raw data
-            Pxx = [Pxx],
-            Pyy = [Pyy],
-            Pxy = [Pxy],
-            Pyx = [Pyx],
-            Cxy_or = [Cxy_or],
-            f = [f],
+            Pxx = Pxx,
+            Pyy = Pyy,
+            Pxy = Pxy,
+            Pyx = Pyx,
+            Cxy_or = Cxy_or,
+            f = f,
 
             # metadata and additional data
             info_relacs = [info],
@@ -251,47 +259,47 @@ if 'load' in sys.argv:
             year = float(sanitize_string(info[0]['Recording']['Date'])[:4])
         )
         data = add_data(data, newrow)
-
+    data['_count'] = entry_num
     # save data
     data_to_file(pkl_file, data)
 
+
+#################
+# ANALYSE
+#################
 if 'analyse' in sys.argv:
 
     # load data
     data = data_from_file(pkl_file)
 
     print('Calculate output-response transfer functions...')
-    for rowidx, rowdata in data.iterrows():
+    for rowidx, (Pxx, Pyy, Pxy, Pyx) in enumerate(zip(data['Pxx'], data['Pyy'], data['Pxy'], data['Pyx'])):
         newdata = dict()
 
         # output-response transfer
-        newdata['H_or'] = rowdata.Pxy / rowdata.Pxx
+        newdata['H_or'] = Pxy / Pxx
 
         # response-output transfer
-        newdata['H_ro'] = rowdata.Pyx / rowdata.Pyy
+        newdata['H_ro'] = Pyx / Pyy
 
         # add data
         data = add_data(data, newdata, rowidx)
 
-
     print('Calculate signal-response transfer functions and coherence...')
     # conditions for calibration-recordings (smallest distance in an open environment)
-    calib_cond = (data.distance == 50) & (data.condition == 'Cutmeadow') & (data.height == 150)
-
-
+    indcs = np.arange(0, data['_count'])
+    calib_cond = indcs[(np.asarray(data['distance']) == 50) & (np.asarray(data['condition']) == 'Cutmeadow') & (np.asarray(data['height']) == 150)]
 
     # calculate mean output-response transfer function for equipment
     # using the recordings made in the open with the smallest speaker-microphone distance
-    H_or_calib = data.H_or[calib_cond].values[0][0]
-    H_ro_calib = data.H_ro[calib_cond].values[0][0]
+    H_or_calib = data['H_or'][calib_cond[0]]
+    H_ro_calib = data['H_ro'][calib_cond[0]]
 
-    for rowidx, rowdata in data.iterrows():
+    for rowidx, (H_or, H_ro) in enumerate(zip(data['H_or'], data['H_ro'])):
         # calculate signal-response transfer functions (forward transfer)
-        H_or = rowdata.H_or[0]
         H_sr = H_or / H_or_calib
 
         # calculate response-signal transfer functions (backward transfer)
-        H_ro = rowdata.H_ro[0]
         H_rs = H_ro / H_ro_calib
 
         Cxy_sr = H_sr * H_rs
@@ -306,8 +314,11 @@ if 'analyse' in sys.argv:
 
     # save data
     data_to_file(pkl_file, data)
-    embed()
 
+
+#################
+# PLOT
+#################
 if 'plot' in sys.argv:
 
     # load data
@@ -315,23 +326,23 @@ if 'plot' in sys.argv:
 
     # sort data
     sorted_data = dict()
-    for rowidx, rowdata in data.iterrows():
-        catid = (rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
+    for rowidx, (f, distance, condition, height, H_sr, Cxy_sr) in enumerate(zip(data['f'], data['distance'], data['condition'], data['height'], data['H_sr'], data['Cxy_or'])):
+        catid = (condition, 'height:' + str(height))
 
         if catid not in sorted_data.keys():
             sorted_data[catid] = dict()
-            sorted_data[catid]['f'] = rowdata.f
+            sorted_data[catid]['f'] = f
             sorted_data[catid]['distance'] = []
             sorted_data[catid]['H_sr'] = []
             sorted_data[catid]['Cxy_sr'] = []
 
-        sorted_data[catid]['distance'].append(rowdata.distance)
-        sorted_data[catid]['H_sr'].append(np.absolute(rowdata.H_sr[0]))
-        sorted_data[catid]['Cxy_sr'].append(np.absolute(rowdata.Cxy_sr[0]))
+        sorted_data[catid]['distance'].append(distance)
+        sorted_data[catid]['H_sr'].append(np.absolute(H_sr))
+        sorted_data[catid]['Cxy_sr'].append(np.absolute(Cxy_sr))
 
     #####
     # calculate average transfer for frequency bins
-    bwidth = 1000
+    bwidth = 2500
     freq_bins = np.arange(5000, 25000, bwidth)
     mfreqs = freq_bins + bwidth / 2
     for catid in sorted_data.keys():
@@ -354,23 +365,24 @@ if 'plot' in sys.argv:
         sorted_data[catid]['mH_sr'] = mH_sr
         sorted_data[catid]['mCxy_sr'] = mCxy_sr
 
+
+        #list1, list2 = zip(*sorted(zip(list1, list2)))  # sort together
+
     figs = dict()
-    #####
+
     # 3d
     # plot surface plot
     if '3d' in sys.argv:
         for catid in sorted_data.keys():
-            if not catid[2] == 'year:2015.0':
-                continue
 
             fig = plt.figure('3d ' + str(catid))
-            figs[catid] = [plt.subplot(1, 2, 1, projection='3d'), plt.subplot(1, 2, 2, projection='3d')]
+            figs[catid] = [fig.add_subplot(1, 2, 1, projection='3d'), fig.add_subplot(1, 2, 2, projection='3d')]
 
             figdata = sorted_data[catid]
             distance = np.asarray(figdata['distance'])
             mfreqs = figdata['mfreqs']
-            mH_sr = abs(np.asarray(figdata['mH_sr']))
-            mCxy_sr = abs(np.asarray(figdata['mCoh']))
+            mH_sr = np.asarray(figdata['mH_sr'])
+            mCxy_sr = np.asarray(figdata['mCxy_sr'])
 
             dist_cond = distance > 0
             # plot
@@ -390,5 +402,40 @@ if 'plot' in sys.argv:
             figs[catid][1].set_xlabel('Sender-receiver distance [cm]')
             figs[catid][1].set_ylabel('Frequency [Hz]')
             figs[catid][1].set_zlabel('Coherence')
+
+    # 2d plot
+    if '2d' in sys.argv:
+        for catid in sorted_data.keys():
+
+            # create
+            fig = plt.figure('2d ' + str(catid))
+            figs[catid] = [fig.add_subplot(1, 2, 1), fig.add_subplot(1, 2, 2)]
+
+            # get data
+            figdata = sorted_data[catid]
+            distance = np.asarray(figdata['distance'])
+            mfreqs = figdata['mfreqs']
+            mH_sr = np.asarray(figdata['mH_sr'])
+            mCxy_sr = np.asarray(figdata['mCxy_sr'])
+
+            # plot
+            #cmap = plt.get_cmap('viridis', lut = mfreqs.shape[0])
+            for freq in mfreqs:
+                lbl = 'f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')'
+                figs[catid][0].loglog(distance, mH_sr[:, mfreqs == freq], label=lbl)
+                figs[catid][1].loglog(distance, mCxy_sr[:, mfreqs == freq], label=lbl)
+            figs[catid][0].loglog(distance, min(distance) / distance, '--k', label='1/distance')
+
+            # format
+            figs[catid][0].set_xlabel('Distance [cm]')
+            figs[catid][1].set_xlabel('Distance [cm]')
+            figs[catid][0].set_xlim(min(distance), max(distance))
+            figs[catid][1].set_xlim(min(distance), max(distance))
+            figs[catid][0].set_ylabel('Gain [V/V]')
+            figs[catid][1].set_ylabel('Coherence')
+            figs[catid][0].set_ylim(0.001, 10)
+
+            figs[catid][0].legend()
+            figs[catid][1].legend()
 
     plt.show()
