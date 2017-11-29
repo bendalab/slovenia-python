@@ -210,6 +210,14 @@ if 'load' in sys.argv:
         Pyx = np.mean(Pyxs, axis=0)
         Cxy_or = np.mean(Cxys, axis=0)
 
+        plt.plot(f, Cxys[0])
+        plt.plot(f, Cxys[1])
+        plt.plot(f, Cxys[2])
+        plt.plot(f, Cxys[3])
+        plt.plot(f, Cxys[4])
+        plt.plot(f, np.absolute(Cxy_or), 'k')
+        plt.show()
+
         # plot
         plotname = 'noise_' + folderpath[-1]
         fig = custom_fig(plotname, (17, 30))
@@ -234,7 +242,9 @@ if 'load' in sys.argv:
         ax5.plot(f, np.absolute(Cxy_or))
         ax5.set_xlabel('Frequency [Hz]')
 
-        plt.savefig(os.path.join(*(glob_fig_path + [plotname + '.pdf'])), format='pdf')
+        figpath = os.path.join(*(glob_fig_path + [plotname + '.pdf']))
+        print(figpath)
+        plt.savefig(figpath, format='pdf')
         plt.close()
 
         # add new row
