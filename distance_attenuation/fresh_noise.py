@@ -335,7 +335,7 @@ if 'plot' in sys.argv:
                           data['condition'],
                           data['height'],
                           data['H_sr'],
-                          data['Cxy_sr'],
+                          data['Cxy_or'],
                           data['Pxy'],
                           data['Pxx'],
                           data['Pyy'])):
@@ -421,7 +421,7 @@ if 'plot' in sys.argv:
             figs[catid][0].set_xlabel('log10(Distance [cm])')
             figs[catid][0].set_ylabel('Frequency [Hz]')
             figs[catid][0].set_zlabel('log10(Gain)')
-            figs[catid][0].set_zlim(-4, 1)
+            figs[catid][0].set_zlim(-4, 2)
 
             # signal-response coherence
             Z_C = mCxy_sr[dist_cond, :].transpose()
@@ -446,11 +446,11 @@ if 'plot' in sys.argv:
             mCxy_sr = np.asarray(figdata['mCxy_sr'])
 
             # plot
-            #cmap = plt.get_cmap('viridis', lut = mfreqs.shape[0])
-            for freq in mfreqs:
+            cmap = plt.get_cmap('viridis', lut = mfreqs.shape[0]).colors
+            for freq, color in zip(mfreqs, cmap):
                 lbl = 'f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')'
-                figs[catid][0].loglog(distance, mH_sr[:, mfreqs == freq], label=lbl)
-                figs[catid][1].loglog(distance, mCxy_sr[:, mfreqs == freq], label=lbl)
+                figs[catid][0].loglog(distance, mH_sr[:, mfreqs == freq], label=lbl, color=color)
+                figs[catid][1].loglog(distance, mCxy_sr[:, mfreqs == freq], label=lbl, color=color)
             figs[catid][0].loglog(distance, min(distance) / distance, '--k', label='1/distance')
 
             # format
@@ -460,7 +460,7 @@ if 'plot' in sys.argv:
             figs[catid][1].set_xlim(min(distance), max(distance))
             figs[catid][0].set_ylabel('Gain [V/V]')
             figs[catid][1].set_ylabel('Coherence')
-            figs[catid][0].set_ylim(0.001, 10)
+            figs[catid][0].set_ylim(0.001, 20)
 
             figs[catid][0].legend()
             figs[catid][1].legend()

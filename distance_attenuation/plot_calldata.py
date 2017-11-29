@@ -73,16 +73,18 @@ if __name__ == '__main__':
             sorted_data[catid]['distance'] = []
             sorted_data[catid]['envelopes'] = []
             sorted_data[catid]['times'] = []
-            sorted_data[catid]['mean_env'] = []
-            sorted_data[catid]['std_env'] = []
+            sorted_data[catid]['env_means'] = []
+            sorted_data[catid]['env_stds'] = []
 
         sorted_data[catid]['distance'].append(rowdata.distance)
         sorted_data[catid]['envelopes'].append(rowdata.envelopes)
         sorted_data[catid]['times'].append(rowdata.times)
-        envelopes = []
-        envelopes.extend([env[(rowdata.times > 0.5) & (rowdata.times < 1.5)] for env in rowdata.envelopes])
-        sorted_data[catid]['mean_env'].append(mean(envelopes))
-        sorted_data[catid]['std_env'].append(std(envelopes))
+
+        env_parts = [env[(rowdata.times > 0.5) & (rowdata.times < 1.5)] for env in rowdata.envelopes]
+        env_means = [mean(env) for env in env_parts]
+        env_stds = [std(env) for env in env_parts]
+        sorted_data[catid]['env_means'].append(env_means)
+        sorted_data[catid]['env_stds'].append(env_stds)
 
 
 
@@ -146,38 +148,53 @@ if __name__ == '__main__':
 
     #  mean(envelope)
     fig = custom_fig('call_mean', (13, 11))
-    figs['gains'] = fig.add_subplot(1, 1, 1)
+    figs['mean'] = fig.add_subplot(1, 1, 1)
     for catid in sorted_data.keys():
         # data
         figdata = sorted_data[catid]
         distance = asarray(figdata['distance'])
-        mean_env = asarray(figdata['mean_env'])
+        mean_env = figdata['env_means']
+        mean_mean_env = [mean(env) for env in mean_env]
+
+        # error bar
+        std_mean_env = [std(env) for env in mean_env]
 
         # plot
-        figs['gains'].semilogx(distance, mean_env, label=catid)
-        figs['gains'].legend()
-        figs['gains'].set_xlabel('Distance [cm]')
-        figs['gains'].set_xlim(100, 3000)
-        figs['gains'].set_ylabel('mean(Env) [a.u.]')
+        figs['mean'].semilogx(distance, mean_mean_env, label=catid[0])
+        #figs['mean'].errorbar(distance, mean_mean_env, yerr=std_mean_env)
+        figs['mean'].legend()
+        figs['mean'].set_xlabel('Distance [cm]')
+        figs['mean'].set_xlim(100, 2000)
+        figs['mean'].set_ylabel('mean(Env) [a.u.]')
 
+        adjust_spines(figs['mean'])
 
     # amplitude transfer std(envelope) / mean(envelope)
     fig = custom_fig('call_std/mean', (13, 11))
-    figs['gains'] = fig.add_subplot(1,1,1)
+    figs['stdmean'] = fig.add_subplot(1,1,1)
     for catid in sorted_data.keys():
 
         # data
         figdata = sorted_data[catid]
+        mean_env = figdata['env_means']
+        std_env = figdata['env_stds']
+        mean_means_env = asarray([mean(env) for env in mean_env])
+        mean_stds_env = asarray([mean(env) for env in std_env])
+
+        # error bar
+        std_mean_env = asarray([std(env) for env in mean_env])
+
         distance = asarray(figdata['distance'])
-        mean_env = asarray(figdata['mean_env'])
-        std_env = asarray(figdata['std_env'])
 
         # plot
-        figs['gains'].semilogx(distance, std_env / mean_env, label=catid)
-        figs['gains'].legend()
-        figs['gains'].set_xlabel('Distance [cm]')
-        figs['gains'].set_xlim(100, 3000)
-        figs['gains'].set_ylabel('SD(Env) / mean(Env) [a.u.]')
+        figs['stdmean'].semilogx(distance, mean_stds_env / mean_means_env, label=catid[0])
+        #figs['stdmean'].errorbar(distance, mean_stds_env / mean_means_env, yerr=std_mean_env)
+        figs['stdmean'].legend()
+        figs['stdmean'].set_xlabel('Distance [cm]')
+        figs['stdmean'].set_xlim(100, 2000)
+        figs['stdmean'].set_ylabel('Modulation Depth [a.u.]')
+
+        adjust_spines(figs['stdmean'])
 
 
 
