@@ -13,6 +13,17 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
 
+def cm2inch(*tupl):
+    inch = 2.54
+    if isinstance(tupl[0], tuple):
+        return tuple(i/inch for i in tupl[0])
+    else:
+        return tuple(i/inch for i in tupl)
+
+def custom_fig(name, size=(9, 8)):
+    return plt.figure(name, figsize=cm2inch(size))
+
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:

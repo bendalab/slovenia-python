@@ -210,13 +210,13 @@ if 'load' in sys.argv:
         Pyx = np.mean(Pyxs, axis=0)
         Cxy_or = np.mean(Cxys, axis=0)
 
-        plt.plot(f, Cxys[0])
-        plt.plot(f, Cxys[1])
-        plt.plot(f, Cxys[2])
-        plt.plot(f, Cxys[3])
-        plt.plot(f, Cxys[4])
-        plt.plot(f, np.absolute(Cxy_or), 'k')
-        plt.show()
+        #plt.plot(f, Cxys[0])
+        #plt.plot(f, Cxys[1])
+        #plt.plot(f, Cxys[2])
+        #plt.plot(f, Cxys[3])
+        #plt.plot(f, Cxys[4])
+        #plt.plot(f, np.absolute(Cxy_or), 'k')
+        #plt.show()
 
         # plot
         plotname = 'noise_' + folderpath[-1]
