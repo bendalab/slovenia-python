@@ -3,6 +3,7 @@ from IPython import embed
 from numpy import *
 import pandas as pd
 import sys
+import time
 
 
 ###
@@ -12,6 +13,30 @@ matplotlib.use('Qt5Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
+
+def adjust_spines(ax, spines = ['left','bottom'], shift_pos = False):
+    for loc, spine in ax.spines.items():
+        if loc in spines:
+            if shift_pos:
+                spine.set_position(('outward', 10))  # outward by 10 points
+            # spine.set_smart_bounds(True)
+        else:
+            spine.set_color('none')  # don't draw spine
+
+    # turn off ticks where there is no spine
+    if 'left' in spines:
+        ax.yaxis.set_ticks_position('left')
+    elif 'right' in spines:
+        ax.yaxis.set_ticks_position('right')
+    else:
+        # no yaxis ticks
+        ax.yaxis.set_ticks([])
+
+    if 'bottom' in spines:
+        ax.xaxis.set_ticks_position('bottom')
+    else:
+        # no xaxis ticks
+        ax.xaxis.set_ticks([])
 
 def cm2inch(*tupl):
     inch = 2.54
@@ -41,21 +66,23 @@ if __name__ == '__main__':
     # sort data
     sorted_data = dict()
     for rowidx, rowdata in avg_data.iterrows():
-        catid = (rowdata.condition, 'height:' + str(rowdata.height), 'year:' + str(rowdata.year))
+        catid = (rowdata.condition, 'height:' + str(rowdata.height))
 
         if catid not in sorted_data.keys():
             sorted_data[catid] = dict()
             sorted_data[catid]['distance'] = []
             sorted_data[catid]['envelopes'] = []
             sorted_data[catid]['times'] = []
-            sorted_data[catid]['gains'] = []
+            sorted_data[catid]['mean_env'] = []
+            sorted_data[catid]['std_env'] = []
 
         sorted_data[catid]['distance'].append(rowdata.distance)
         sorted_data[catid]['envelopes'].append(rowdata.envelopes)
         sorted_data[catid]['times'].append(rowdata.times)
         envelopes = []
         envelopes.extend([env[(rowdata.times > 0.5) & (rowdata.times < 1.5)] for env in rowdata.envelopes])
-        sorted_data[catid]['gains'].append(std(envelopes) / mean(envelopes))
+        sorted_data[catid]['mean_env'].append(mean(envelopes))
+        sorted_data[catid]['std_env'].append(std(envelopes))
 
 
 
@@ -63,52 +90,97 @@ if __name__ == '__main__':
     # plot data
     figs = dict()
 
-    # ENVELOPES
+    # raw ENVELOPES
     for catid in sorted_data.keys():
-        fig = plt.figure('raw ' + str(catid))
+        fig = custom_fig('raw ' + str(catid), (13, 16))
         figs[catid] = []
 
+        # load data
         figdata = sorted_data[catid]
-        distance = asarray(figdata['distance'])
+        distance = figdata['distance']
         envelopes = figdata['envelopes']
         times = figdata['times']
 
-        plotnum = distance.shape[0]
-        for idx, (dist, env, t) in enumerate(zip(distance, envelopes, times)):
+        # filter distances
+        dist = asarray(distance, dtype=int)
+        dist_cond = (dist <= 1000) & (dist != 700) & (dist != 500) & (dist != 900)
+        dist_range = arange(0, len(distance))
+        dist_range = dist_range[dist_cond]
+
+
+        plotnum = len(dist_range)
+        ylims = [[-0.1, 1.25], [-0.05, 0.7], [-0.02, 0.5], [-0.01, 0.25], [-0.01, 0.25], [-0.01, 0.25], [-0.01, 0.25]]
+        for pltidx, (idx, ylim) in enumerate(zip(dist_range, ylims)):
             if idx == 0:
-                figs[catid].append(fig.add_subplot(plotnum, 1, idx + 1))
+                figs[catid].append(fig.add_subplot(plotnum, 1, pltidx + 1))
             else:
-                figs[catid].append(fig.add_subplot(plotnum, 1, idx + 1, sharex=figs[catid][-1], sharey=figs[catid][-1]))
+                figs[catid].append(fig.add_subplot(plotnum, 1, pltidx + 1))
+
+            t = times[idx]
+            env = envelopes[idx]
+            dist = distance[idx]
+
 
             mEnv = mean(env, axis=0)
             mEnvStd = std(env, axis=0)
-            figs[catid][-1].fill_between(t, mEnv - mEnvStd, mEnv + mEnvStd, color='gray')
-            figs[catid][-1].plot(t, mEnv, color='red')
-            figs[catid][-1].set_title('distance: ' + str(dist))
+            # plot
+            figs[catid][pltidx].fill_between(t, mEnv - mEnvStd, mEnv + mEnvStd, color='gray')
+            figs[catid][pltidx].plot(t, mEnv)
 
-        figs[catid][int(round(len(figs[catid])/2))].set_ylabel('Envelope magnitude')
-        figs[catid][-1].set_xlabel('Time [s]')
+            # format
+            figs[catid][pltidx].set_xlim(0, 2.5)
+            figs[catid][pltidx].set_ylim(*ylim)
+
+            xtick = [0, 0.5, 1, 1.5, 2, 2.5]
+            figs[catid][pltidx].set_xticks(xtick)
+            figs[catid][pltidx].set_xticklabels([])
+
+            figs[catid][pltidx].text(2.1, ylim[1] - 0.25 * (diff(ylim)), str(round(dist)) + 'cm')
+
+            adjust_spines(figs[catid][-1])
+
+        figs[catid][6].set_xticklabels(xtick)
+        figs[catid][3].set_ylabel('Envelope magnitude')
+        figs[catid][6].set_xlabel('Time [s]')
 
 
-    # GAIN std(envelope)
-    fig = plt.figure('gains')
+    #  mean(envelope)
+    fig = custom_fig('call_mean', (13, 11))
+    figs['gains'] = fig.add_subplot(1, 1, 1)
+    for catid in sorted_data.keys():
+        # data
+        figdata = sorted_data[catid]
+        distance = asarray(figdata['distance'])
+        mean_env = asarray(figdata['mean_env'])
+
+        # plot
+        figs['gains'].semilogx(distance, mean_env, label=catid)
+        figs['gains'].legend()
+        figs['gains'].set_xlabel('Distance [cm]')
+        figs['gains'].set_xlim(100, 3000)
+        figs['gains'].set_ylabel('mean(Env) [a.u.]')
+
+
+    # amplitude transfer std(envelope) / mean(envelope)
+    fig = custom_fig('call_std/mean', (13, 11))
     figs['gains'] = fig.add_subplot(1,1,1)
-    open_distances = asarray(sorted_data[('Open', 'height:80.0', 'year:2016.0')]['distance'])
-    open_gains = asarray(sorted_data[('Open', 'height:80.0', 'year:2016.0')]['gains'])
-    max_gain = open_gains[open_distances == 100]
     for catid in sorted_data.keys():
 
         # data
         figdata = sorted_data[catid]
         distance = asarray(figdata['distance'])
-        gains = asarray(figdata['gains'])
+        mean_env = asarray(figdata['mean_env'])
+        std_env = asarray(figdata['std_env'])
 
         # plot
-        figs['gains'].semilogx(distance, gains / max_gain, label=catid)
+        figs['gains'].semilogx(distance, std_env / mean_env, label=catid)
         figs['gains'].legend()
         figs['gains'].set_xlabel('Distance [cm]')
-        figs['gains'].set_xlim(100, 2000)
-        figs['gains'].set_ylabel('SD(Env) / mean(Env)')
+        figs['gains'].set_xlim(100, 3000)
+        figs['gains'].set_ylabel('SD(Env) / mean(Env) [a.u.]')
+
+
+
 
 
 

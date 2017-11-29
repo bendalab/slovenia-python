@@ -210,14 +210,6 @@ if 'load' in sys.argv:
         Pyx = np.mean(Pyxs, axis=0)
         Cxy_or = np.mean(Cxys, axis=0)
 
-        #plt.plot(f, Cxys[0])
-        #plt.plot(f, Cxys[1])
-        #plt.plot(f, Cxys[2])
-        #plt.plot(f, Cxys[3])
-        #plt.plot(f, Cxys[4])
-        #plt.plot(f, np.absolute(Cxy_or), 'k')
-        #plt.show()
-
         # plot
         plotname = 'noise_' + folderpath[-1]
         fig = custom_fig(plotname, (17, 30))
@@ -358,10 +350,10 @@ if 'plot' in sys.argv:
             sorted_data[catid]['Cxy_sr'] = []
 
         sorted_data[catid]['distance'].append(distance)
-        sorted_data[catid]['H_sr'].append(np.absolute(H_sr))
+        sorted_data[catid]['H_sr'].append(H_sr)
         sorted_data[catid]['Cxy_sr'].append(np.absolute(Cxy_sr))
         # test
-        #sorted_data[catid]['Cxy_sr'].append(np.absolute(Pxy) ** 2 / (Pxx * Pyy))
+        #sorted_data[catid]['Cxy_sr'].append(Pxy ** 2 / (Pxx * Pyy)) # calc coherence manually, should be approx. equal to Cxy_or
 
     #####
     # calculate average transfer for frequency bins
@@ -421,12 +413,12 @@ if 'plot' in sys.argv:
 
             dist_cond = distance > 0
             # plot
-            X, Y = np.meshgrid(distance[dist_cond], mfreqs)
+            X, Y = np.meshgrid(np.log10(distance[dist_cond]), mfreqs)
 
             # signal-response transfer
             Z_H = np.log10(mH_sr[dist_cond, :].transpose())
             surf = figs[catid][0].plot_surface(X, Y, Z_H, cmap='viridis', linewidth=0, antialiased=False)
-            figs[catid][0].set_xlabel('Sender-receiver distance [cm]')
+            figs[catid][0].set_xlabel('log10(Distance [cm])')
             figs[catid][0].set_ylabel('Frequency [Hz]')
             figs[catid][0].set_zlabel('log10(Gain)')
             figs[catid][0].set_zlim(-4, 1)
@@ -434,7 +426,7 @@ if 'plot' in sys.argv:
             # signal-response coherence
             Z_C = mCxy_sr[dist_cond, :].transpose()
             surf = figs[catid][1].plot_surface(X, Y, Z_C, cmap='viridis', linewidth=0, antialiased=False)
-            figs[catid][1].set_xlabel('Sender-receiver distance [cm]')
+            figs[catid][1].set_xlabel('log10(Distance [cm])')
             figs[catid][1].set_ylabel('Frequency [Hz]')
             figs[catid][1].set_zlabel('Coherence')
 
