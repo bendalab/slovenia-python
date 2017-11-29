@@ -20,7 +20,7 @@ import time
 if __name__ == '__main__':
     import matplotlib
     from mpl_toolkits.mplot3d import Axes3D
-    #matplotlib.use('GTK')
+    matplotlib.use('Qt5Agg')
     import matplotlib.pyplot as plt
 
 
@@ -196,11 +196,11 @@ if 'load' in sys.argv:
             Pyx, _ = ml.csd(y, x, Fs=sr, **params)
             Cxy, f = ml.cohere(x, y, Fs=sr, **params)
 
-            Pxxs.append(Pxx)
-            Pyys.append(Pyy)
-            Pxys.append(Pxy)
-            Pyxs.append(Pyx)
-            Cxys.append(Cxy)
+            Pxxs.append(np.absolute(Pxx))
+            Pyys.append(np.absolute(Pyy))
+            Pxys.append(np.absolute(Pxy))
+            Pyxs.append(np.absolute(Pyx))
+            Cxys.append(np.absolute(Cxy))
         freqs = f
 
         # calculate mean
@@ -324,9 +324,20 @@ if 'plot' in sys.argv:
     # load data
     data = data_from_file(pkl_file)
 
-    # sort data
+    #####
+    # sort data into categories
     sorted_data = dict()
-    for rowidx, (f, distance, condition, height, H_sr, Cxy_sr) in enumerate(zip(data['f'], data['distance'], data['condition'], data['height'], data['H_sr'], data['Cxy_or'])):
+    for rowidx, (f, distance, condition, height, H_sr, Cxy_sr, Pxy, Pxx, Pyy) in \
+            enumerate(zip(data['f'],
+                          data['distance'],
+                          data['condition'],
+                          data['height'],
+                          data['H_sr'],
+                          data['Cxy_sr'],
+                          data['Pxy'],
+                          data['Pxx'],
+                          data['Pyy'])):
+
         catid = (condition, 'height:' + str(height))
 
         if catid not in sorted_data.keys():
@@ -339,16 +350,18 @@ if 'plot' in sys.argv:
         sorted_data[catid]['distance'].append(distance)
         sorted_data[catid]['H_sr'].append(np.absolute(H_sr))
         sorted_data[catid]['Cxy_sr'].append(np.absolute(Cxy_sr))
+        # test
+        #sorted_data[catid]['Cxy_sr'].append(np.absolute(Pxy) ** 2 / (Pxx * Pyy))
 
     #####
     # calculate average transfer for frequency bins
     bwidth = 2500
-    freq_bins = np.arange(5000, 25000, bwidth)
+    freq_bins = np.arange(5000, 30000, bwidth)
     mfreqs = freq_bins + bwidth / 2
     for catid in sorted_data.keys():
         figdata = sorted_data[catid]
-        freqs = figdata['f']
         distance = np.asarray(figdata['distance'])
+        freqs = figdata['f']
         H_sr = np.asarray(figdata['H_sr'])
         coherence = np.asarray(figdata['Cxy_sr'])
 
@@ -365,8 +378,20 @@ if 'plot' in sys.argv:
         sorted_data[catid]['mH_sr'] = mH_sr
         sorted_data[catid]['mCxy_sr'] = mCxy_sr
 
+    #####
+    # sort data according to distance
+    for catid in sorted_data.keys():
+        figdata = sorted_data[catid]
+        dist = figdata['distance']
+        mH_sr = figdata['mH_sr']
+        mCxy_sr = figdata['mCxy_sr']
 
-        #list1, list2 = zip(*sorted(zip(list1, list2)))  # sort together
+        dist, mH_sr, mCxy_sr = zip(*sorted(zip(dist, mH_sr, mCxy_sr)))
+
+        figdata['distance'] = dist
+        figdata['mH_sr'] = mH_sr
+        figdata['mCxy_sr'] = mCxy_sr
+
 
     figs = dict()
 
