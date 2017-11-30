@@ -15,7 +15,11 @@ fig.set_dpi(192)
 a = a.ravel()
 for idx, ax in enumerate(a):
     diff = np.diff(data['{0}. trace'.format(idx)]['CallStart'])
+    median = np.median(diff)
+    print(median)
     ax.hist(diff, bins=np.arange(0, 15, .5))
+    ax.plot([median, median], [0, 150], 'r')
+    ax.text(median + 1, 100, '{0}s'.format(np.round(median, 2)), color='r')
     if idx == 3:
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('Count')
