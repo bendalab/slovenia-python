@@ -476,10 +476,16 @@ if 'plot' in sys.argv:
     # 3d
     # plot surface plot
     if '3d' in sys.argv:
+
+        psize = (13, 15)
+
         for catid in sorted_data.keys():
 
-            fig = plt.figure('3d ' + str(catid))
-            figs[catid] = [fig.add_subplot(1, 2, 1, projection='3d'), fig.add_subplot(1, 2, 2, projection='3d')]
+            fig = custom_fig('3d gain' + str(catid), psize)
+            figs[catid] = [fig.add_subplot(1, 1, 1, projection='3d')]
+
+            fig = custom_fig('3d coh' + str(catid), psize)
+            figs[catid].append(fig.add_subplot(1, 1, 1, projection='3d'))
 
             figdata = sorted_data[catid]
             distance = np.asarray(figdata['distance'])
@@ -497,7 +503,7 @@ if 'plot' in sys.argv:
             figs[catid][0].set_xlabel('log10(Distance [cm])')
             figs[catid][0].set_ylabel('Frequency [Hz]')
             figs[catid][0].set_zlabel('log10(Gain)')
-            figs[catid][0].set_zlim(-4, 2)
+            figs[catid][0].set_zlim(-4, 1)
 
             # signal-response coherence
             Z_C = mCxy_sr[dist_cond, :].transpose()
@@ -508,11 +514,10 @@ if 'plot' in sys.argv:
 
     # 2d plot
     if '2d' in sys.argv:
-        for catid in sorted_data.keys():
 
-            # create
-            fig = plt.figure('2d ' + str(catid))
-            figs[catid] = [fig.add_subplot(1, 2, 1), fig.add_subplot(1, 2, 2)]
+        psize = (13.5, 11)
+
+        for catid in sorted_data.keys():
 
             # get data
             figdata = sorted_data[catid]
@@ -521,24 +526,34 @@ if 'plot' in sys.argv:
             mH_sr = np.asarray(figdata['mH_sr'])
             mCxy_sr = np.asarray(figdata['mCxy_sr'])
 
-            # plot
+            # plot as function of distance
+            fig = custom_fig('2d distance' + str(catid), psize)
+            figs[catid] = [fig.add_subplot(1, 1, 1)]
             cmap = plt.get_cmap('viridis', lut = mfreqs.shape[0]).colors
             for freq, color in zip(mfreqs, cmap):
-                lbl = 'f(' + str(freq - bwidth / 2) + ' - ' + str(freq + bwidth / 2) + ')'
-                figs[catid][0].loglog(distance, mH_sr[:, mfreqs == freq], label=lbl, color=color)
-                figs[catid][1].loglog(distance, mCxy_sr[:, mfreqs == freq], label=lbl, color=color)
-            figs[catid][0].loglog(distance, min(distance) / distance, '--k', label='1/distance')
+                lbl =  str(int(freq - bwidth / 2)) + ' - ' + str(int(freq + bwidth / 2)) + ' Hz'
+                figs[catid][0].semilogy(distance, mH_sr[:, mfreqs == freq], label=lbl, color=color)
+            figs[catid][0].semilogy(distance, min(distance) / distance, '--k', label='1 / distance')
 
             # format
             figs[catid][0].set_xlabel('Distance [cm]')
-            figs[catid][1].set_xlabel('Distance [cm]')
             figs[catid][0].set_xlim(min(distance), max(distance))
-            figs[catid][1].set_xlim(min(distance), max(distance))
-            figs[catid][0].set_ylabel('Gain [V/V]')
-            figs[catid][1].set_ylabel('Coherence')
-            figs[catid][0].set_ylim(0.001, 20)
+            figs[catid][0].set_ylabel('Gain [a.u.]')
+            figs[catid][0].set_ylim(0.0001, 100)
 
-            figs[catid][0].legend()
-            figs[catid][1].legend()
+            figs[catid][0].legend(loc='upper right')
+
+
+            # plot as function of frequency
+            fig = custom_fig('2d frequency' + str(catid), psize)
+            figs[catid].append(fig.add_subplot(1, 1, 1))
+            # plot
+            cmap = plt.get_cmap('viridis', lut=distance.shape[0]).colors
+            for dist, color in zip(distance, cmap):
+                lbl = str(int(dist)) + ' cm'
+                figs[catid][1].semilogy(mfreqs, mH_sr[distance == dist, :].transpose(), label=lbl, color=color)
+            figs[catid][1].set_xlabel('Frequency [Hz]')
+            figs[catid][1].set_ylabel('Gain [a.u.]')
+            figs[catid][1].legend(loc='upper left')
 
     plt.show()

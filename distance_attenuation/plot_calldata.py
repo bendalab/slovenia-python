@@ -160,8 +160,9 @@ if __name__ == '__main__':
         std_mean_env = [std(env) for env in mean_env]
 
         # plot
-        figs['mean'].semilogx(distance, mean_mean_env, label=catid[0])
-        #figs['mean'].errorbar(distance, mean_mean_env, yerr=std_mean_env)
+        #figs['mean'].semilogx(distance, mean_mean_env, label=catid[0])
+        figs['mean'].semilogx()
+        figs['mean'].errorbar(distance, mean_mean_env, yerr=std_mean_env, label=catid[0])
         figs['mean'].legend()
         figs['mean'].set_xlabel('Distance [cm]')
         figs['mean'].set_xlim(100, 2000)
@@ -187,8 +188,9 @@ if __name__ == '__main__':
         distance = asarray(figdata['distance'])
 
         # plot
-        figs['stdmean'].semilogx(distance, mean_stds_env / mean_means_env, label=catid[0])
-        #figs['stdmean'].errorbar(distance, mean_stds_env / mean_means_env, yerr=std_mean_env)
+        #figs['stdmean'].semilogx(distance, mean_stds_env / mean_means_env, label=catid[0])
+        figs['stdmean'].semilogx()
+        figs['stdmean'].errorbar(distance, mean_stds_env / mean_means_env, yerr=std_mean_env, label=catid[0])
         figs['stdmean'].legend()
         figs['stdmean'].set_xlabel('Distance [cm]')
         figs['stdmean'].set_xlim(100, 2000)
