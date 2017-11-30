@@ -36,6 +36,8 @@ glob_fig_path = ['..', '..', 'figures']
 # methods
 ###############
 
+
+
 def add_data(data, rowdata, rowidx = None):
     # expects two arguments
     #   data: the DataFrame
@@ -64,6 +66,30 @@ def add_data(data, rowdata, rowidx = None):
 
 
     return data
+
+def adjust_spines(ax, spines = ['left','bottom'], shift_pos = False):
+    for loc, spine in ax.spines.items():
+        if loc in spines:
+            if shift_pos:
+                spine.set_position(('outward', 10))  # outward by 10 points
+            # spine.set_smart_bounds(True)
+        else:
+            spine.set_color('none')  # don't draw spine
+
+    # turn off ticks where there is no spine
+    if 'left' in spines:
+        ax.yaxis.set_ticks_position('left')
+    elif 'right' in spines:
+        ax.yaxis.set_ticks_position('right')
+    else:
+        # no yaxis ticks
+        ax.yaxis.set_ticks([])
+
+    if 'bottom' in spines:
+        ax.xaxis.set_ticks_position('bottom')
+    else:
+        # no xaxis ticks
+        ax.xaxis.set_ticks([])
 
 def cm2inch(*tupl):
     inch = 2.54
@@ -136,6 +162,56 @@ if len(sys.argv) == 1:
 
 # pkl file to save to
 pkl_file = 'noise.pkl'
+
+
+#################
+# ILUUSTRATION of PSD, CSD and TRANSFER
+#################
+if 'illustrate' in sys.argv:
+    folderpath = ['2015', '2015-08-01-aa-free']
+    sr = 100000
+    nfft = 2 ** 14
+    params = {'NFFT': nfft, 'noverlap': nfft / 2}
+
+    metadata, traces = load_traces_dat(folderpath, 'transferfunction-traces.dat')
+
+    t = traces[0]
+    x = t[1, :]
+    y = t[2, :]
+
+    # subtract mean
+    x = x - np.mean(x)
+    y = y - np.mean(y)
+
+    Pxx, _ = ml.psd(x, Fs=sr, **params)
+    Pyy, _ = ml.psd(y, Fs=sr, **params)
+    Pxy, f = ml.csd(x, y, Fs=sr, **params)
+
+    fig = custom_fig('CSD illustration', (13, 15))
+    ax1 = plt.subplot(2, 1, 1)
+    ax1.fill_between([0, 20000], -0.1, 1.1, color='lightgray')
+    ax1.plot(f, Pxx / max(Pxx), label='PSD(x)')
+    ax1.plot(f, Pyy / max(Pyy), label='PSD(y)')
+    ax1.set_ylabel('Auto spectral density')
+    ax1.set_yticks([])
+    ax1.set_ylim(-0.1, 1.1)
+    ax1.set_xlim(-500, 30000)
+    ax1.set_xticklabels([])
+    ax1.legend()
+
+    adjust_spines(ax1)
+
+    ax2 = plt.subplot(2, 1, 2)
+    ax2.plot(f, np.absolute(Pxy), color='black', label='CSD(x, y)')
+    ax2.set_ylabel('Cross spectral density')
+    ax2.set_xlabel('Frequency [Hz]')
+    ax2.set_yticks([])
+    ax2.set_xlim(-500, 30000)
+    ax2.legend()
+
+    adjust_spines(ax2)
+
+    plt.show()
 
 
 #################
