@@ -74,14 +74,14 @@ def set_plot_stuff_hist(ax):
 
 plt.rcParams['font.size'] = 20
 
-times_1 = np.arange(2, 50, 5, dtype=float)
-times_2 = np.arange(1, 50, 5, dtype=float)
+times_1 = np.arange(2, 2500, 5, dtype=float)
+times_2 = np.arange(1, 2500, 5, dtype=float)
 times_1 += np.random.random(times_1.shape) - 1
 times_2 += np.random.random(times_2.shape) - 1
 color_1 = '#1f77b4'
 color_2 = '#ff7f0e'
-corr_color = '#d62728'
-conf_color = '#2ca02c'
+corr_color = '#1f77b4'
+conf_color = '#ff7f0e'
 
 fig_1 = make_figure('times')
 plot_times(times_1, .5, color_1)

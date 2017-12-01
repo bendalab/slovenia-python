@@ -12,8 +12,8 @@ with shelve.open('myShelf') as data:
 lags = all_correlations['lags']
 
 plt.rcParams['font.size'] = 12
-corr_color = '#d62728'
-conf_color = '#2ca02c'
+corr_color = '#1f77b4'
+conf_color = '#ff7f0e'
 
 fig_width = 25.4
 fig_height = 19.05
