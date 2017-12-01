@@ -42,13 +42,13 @@ for i_1 in range(6):
         first_flag = 0
         if i_1 == 0:
             ax.text(.5, 1.1,
-                    'Cricket #{0}'.format(i_2),
+                    'Cricket #{0}'.format(i_2 + 1),
                     ha='center',
                     va='bottom',
                     transform=ax.transAxes)
         if i_2 == 5:
             ax.text(1.1, .5,
-                    'Cricket #{0}'.format(i_1),
+                    'Cricket #{0}'.format(i_1 + 1),
                     ha='left',
                     va='center',
                     rotation='vertical',
